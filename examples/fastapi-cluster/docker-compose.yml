@@ -1,0 +1,164 @@
+version: '3.7'
+
+networks:
+  redis_ml_network:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.82.0.0/24
+
+# Settings and configurations that are common for all containers
+x-redis-common: &redis-common
+  image: redis:${REDIS_TAG}
+  build:
+    context: .
+    dockerfile: include/redis.Dockerfile
+    args:
+      REDIS_TAG: ${REDIS_TAG}
+  command: [ "redis-server", "/usr/local/etc/redis/redis.conf" ]
+  restart: always
+  env_file:
+    - .env
+  healthcheck:
+    test: ["CMD", "redis-cli", "ping"]
+    interval: 10s
+    timeout: 30s
+    retries: 50
+    start_period: 30s
+
+# Volumes for per container data persistence (Redis Cluster Data)
+volumes:
+  redis_1_data: {}
+  redis_2_data: {}
+  redis_3_data: {}
+  redis_4_data: {}
+  redis_5_data: {}
+  redis_6_data: {}
+
+services:
+  haredis:
+    build:
+      context: .
+      dockerfile: include/backend.Dockerfile
+    container_name: ${SERVICE_NAME}
+    image: "${SERVICE_IMAGE}:${SERVICE_TAG}"
+    hostname: ${SERVICE_NAME}
+    stdin_open: true
+    tty: true
+    env_file:
+      - .env
+    environment:
+      - PORT=${API_PORT}
+    restart: unless-stopped
+    volumes:
+      - ./:${API_VOL}/
+    ports:
+      - "${API_PORT}:${API_PORT}"
+    networks:
+      redis_ml_network:
+        ipv4_address: ${IP_API}
+    depends_on:
+      - cluster_initiator
+    command: python3 api.py
+    #command: /bin/bash
+
+
+  # ==================== #
+
+  redis_1:
+    <<: *redis-common
+    container_name: redis_1
+    volumes:
+      - redis_1_data:/data
+      - ./include/conf/redis/redis_1.conf:/usr/local/etc/redis/redis.conf
+    ports:
+      - "${REDIS_1_PORT}:${REDIS_1_PORT}"
+    networks:
+      redis_ml_network:
+        ipv4_address: ${IP_REDIS_1}
+
+  redis_2:
+    <<: *redis-common
+    container_name: redis_2
+    volumes:
+      - redis_2_data:/data
+      - ./include/conf/redis/redis_2.conf:/usr/local/etc/redis/redis.conf
+    ports:
+      - "${REDIS_2_PORT}:${REDIS_2_PORT}"
+    networks:
+      redis_ml_network:
+        ipv4_address: ${IP_REDIS_2}
+
+  redis_3:
+    <<: *redis-common
+    container_name: redis_3
+    volumes:
+      - redis_3_data:/data
+      - ./include/conf/redis/redis_3.conf:/usr/local/etc/redis/redis.conf
+    ports:
+      - "${REDIS_3_PORT}:${REDIS_3_PORT}"
+    networks:
+      redis_ml_network:
+        ipv4_address: ${IP_REDIS_3}
+
+  redis_4:
+    <<: *redis-common
+    container_name: redis_4
+    volumes:
+      - redis_4_data:/data
+      - ./include/conf/redis/redis_4.conf:/usr/local/etc/redis/redis.conf
+    ports:
+      - "${REDIS_4_PORT}:${REDIS_4_PORT}"
+    networks:
+      redis_ml_network:
+        ipv4_address: ${IP_REDIS_4}
+
+  redis_5:
+    <<: *redis-common
+    container_name: redis_5
+    volumes:
+      - redis_5_data:/data
+      - ./include/conf/redis/redis_5.conf:/usr/local/etc/redis/redis.conf
+    ports:
+      - "${REDIS_5_PORT}:${REDIS_5_PORT}"
+    networks:
+      redis_ml_network:
+        ipv4_address: ${IP_REDIS_5}
+
+  redis_6:
+    <<: *redis-common
+    container_name: redis_6
+    volumes:
+      - redis_6_data:/data
+      - ./include/conf/redis/redis_6.conf:/usr/local/etc/redis/redis.conf
+    ports:
+      - "${REDIS_6_PORT}:${REDIS_6_PORT}"
+    networks:
+      redis_ml_network:
+        ipv4_address: ${IP_REDIS_6}
+
+  # Ephemeral container to create the Redis cluster connections.
+  # Once the setup is done, this container shuts down
+  # and the cluster can be used by the service app container
+  cluster_initiator:
+    image: redis-cluster-init
+    container_name: cluster_initiator
+    build:
+      context: .
+      dockerfile: include/init.Dockerfile
+      args:
+        REDIS_TAG: ${REDIS_TAG}
+    tty: true
+    env_file:
+      - .env
+    depends_on:
+      - redis_1
+      - redis_2
+      - redis_3
+      - redis_4
+      - redis_5
+      - redis_6
+    networks:
+      redis_ml_network:
+        ipv4_address: ${IP_CLUSTER_INITIATOR}

@@ -47,7 +47,7 @@ services:
     container_name: ${REDIS_HOST}
     restart: always
     volumes:
-      - ./include/conf/redis/redis.conf:/usr/local/etc/redis/redis.conf
+      - ./include/conf/redis/redis-standalone/redis.conf:/usr/local/etc/redis/redis.conf
     env_file:
       - .env
     ports:

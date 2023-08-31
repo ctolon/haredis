@@ -1,0 +1,9 @@
+fastapi[all]
+uvicorn
+gunicorn
+pydantic
+pydantic-settings
+
+redis
+# celery
+# redis_om
