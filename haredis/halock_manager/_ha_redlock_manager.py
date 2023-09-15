@@ -166,7 +166,7 @@ class HAredlockManager(object):
         wait_time=10,
         additional_time=10,
         replace_ttl = True,
-        *args,
+        args=tuple(),
         **kwargs
         ):
         """haredis distributed locking algorithm implementation in redis using stream api xread/xadd (For both syncronous/asyncronous execution)

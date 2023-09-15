@@ -104,7 +104,7 @@ class EventModel(metaclass=Singleton):
             wait_time=10,
             additional_time=10,
             replace_ttl = True,
-            # *args,
+            args=("test"),
             **kwargs
         )
                
@@ -138,7 +138,7 @@ class EventModel(metaclass=Singleton):
             wait_time=10,
             additional_time=10,
             replace_ttl = True,
-            *args,
+            args=("test"),
             **kwargs
         )
                

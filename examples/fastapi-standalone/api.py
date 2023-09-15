@@ -44,7 +44,7 @@ async def startup_event():
         password=RedisSettings.PASSWORD,
         decode_responses=True,
         encoding="utf-8",
-        max_connections=2*31
+        max_connections=2**31
         )
     
     aioredis_client = AioRedisClient(
@@ -54,7 +54,7 @@ async def startup_event():
         password=RedisSettings.PASSWORD,
         decode_responses=True,
         encoding="utf-8",
-        max_connections=2*31
+        max_connections=2**31
         )
     
     redis_client.connection_test()
@@ -87,8 +87,7 @@ if __name__ == '__main__':
     uvicorn.run(
         "api:app",
         host=APISettings.HOST,
-        #port=APISettings.PORT,
-        port=5703,
+        port=APISettings.PORT,
         log_level="info",
         reload=True
     )
