@@ -44,7 +44,25 @@ def set_up_logging(
         log_line_template="%(color_on)s[%(asctime)s] [%(levelname)s] %(message)s%(color_off)s",
         logger_name="redis",
         log_propagate=False
-):
+) -> logging.Logger:
+    """Set up logging function.
+
+    Args:
+        log_to_console (bool, optional): If True log to console. Defaults to True.
+        log_to_file (bool, optional): If True log to file. Defaults to True.
+        console_log_output (str, optional): Type of console log output. Defaults to "stdout".
+        console_log_level (str, optional): console log level. Defaults to "INFO".
+        console_log_color (bool, optional): If True colorized console log output. Defaults to True.
+        logfile_file (str, optional): Path to log file with name. Defaults to "redis.log".
+        logfile_log_level (str, optional): logfile log level. Defaults to "INFO".
+        logfile_log_color (bool, optional): If True colorized log file output. Defaults to False.
+        log_line_template (str, optional): Log Line template. Defaults to "%(color_on)s[%(asctime)s] [%(levelname)s] %(message)s%(color_off)s".
+        logger_name (str, optional): Name of the logger instance. Defaults to "redis".
+        log_propagate (bool, optional): If True propagate to logger. Defaults to False.
+
+    Returns:
+        logging.Logger: A Logger instance.
+    """
     global loggers
 
     if loggers.get(logger_name):

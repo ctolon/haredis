@@ -1,59 +1,32 @@
-"""HARedis Redis Client Implementation with Sync API."""
-import time
+"""HARedis AioRedis Client Implementation."""
+import asyncio
+from typing import Union
 
-import redis
-from redis.lock import Lock
+from redis import asyncio as aioredis
+from redis.asyncio.lock import Lock
 
 
-class RedisClient(redis.ConnectionPool):
+class AioHaredisClient:
     """
-    Redis Client Implementation with Sync API. It inherits from main redis.StrictRedis class and it has extra implementations.
+    haredis client class for redis async api.
     """
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        try:
-            self.client_conn = redis.StrictRedis(connection_pool=self)
-        except redis.ConnectionError as e:
-            print(f"Error connecting to Redis: {e}")
-        
-    def connection_test(self, *args, **kwargs):
-        """Main client connection test method"""
-        
-        try:
-            _ = self.client_conn.ping()
-            print(f"Ping Response on Redis Client: {_}")
-            print(f"Connected to Redis with sync API: {kwargs.get('host', 'localhost')}:{kwargs.get('port', 6379)}.")
-        except redis.ConnectionError as e:
-            print(f"Error connecting to Redis: {e}")
-
-    def close_client(self):
-        """Close Redis connection."""
-        
-        self.disconnect(inuse_connections=True)
-        self.client_conn.close()
-        print("Disconnected from Redis.")
-            
-    def get_redis_client(self):
-        """Get Redis Client as Connection pool."""
-        
-        return self
     
-    def get_native_redis(self) -> redis.StrictRedis:
-        """Get Native Redis Instance."""
-        
-        return self.client_conn
+    def __init__(self, client_conn: Union[aioredis.StrictRedis, aioredis.Redis]):
+        """Constructor method for HaredisClient class.
 
-    def execute(self, command, *args, **kwargs):
-        """Execute any Redis command with native API."""
-        
-        try:
-            result = self.client_conn.execute_command(command, *args, **kwargs)
-            return result
-        except redis.RedisError as e:
-            print(f"Redis command error: {e} - {command} {args} {kwargs}")
-            return None        
+        Args:
+            client_conn (Union[redis.StrictRedis, redis.Redis]): Redis client connection object.
 
-    def produce_event_xadd(self, stream_name: str, data: dict, max_messages = 1, maxlen=1, stream_id="*"):
+        Raises:
+            TypeError: If client connection is not redis.StrictRedis or redis.Redis
+        """
+        
+        self.client_conn = client_conn
+        if type(self.client_conn) not in (aioredis.StrictRedis, aioredis.Redis):
+            raise TypeError("Client connection must be redis.StrictRedis or redis.Redis")
+                
+    # Producer - Consumer Implementation for streams API
+    async def produce_event_xadd(self, stream_name: str, data: dict, max_messages = 1, maxlen=1, stream_id="*"):
         """
         This method produces messages to a Redis Stream. Defaults to produce 1 event. If you want to produce more than 1 event,
         you can use max_messages argument. If you want to produce events infinitely, you can set max_messages to None.
@@ -63,25 +36,23 @@ class RedisClient(redis.ConnectionPool):
             data (dict): Data to be sent to the stream as event.
             max_messages (int, optional): Max message limit. Defaults to 1. If None, it will produce messages infinitely.
             stream_id (str, optional): Stream id. Defaults to "*". If *, it will generate unique id automatically.
-            maxlen (int, optional): Max length of the stream. Defaults to 1.
-            strict (bool, optional): If True, it will raise RuntimeError if producer name is not provided. Defaults to False.
 
         Raises:
-            RuntimeError: If producer name is not provided.
+            RuntimeError: If producer name is not provided when strict is true.
             
         """
         
         # Counter for max message limit
         count = 0
-                
+                        
         # Add event to stream as limited message (Defaults to 1 message to add stream).
         if max_messages:
             while count < max_messages:
-                _ = self.client_conn.xadd(name=stream_name, fields=data, id=stream_id, maxlen=maxlen)
+                _ = await self.client_conn.xadd(name=stream_name, fields=data, id=stream_id, maxlen=maxlen)
 
-                info = self.client_conn.xinfo_stream(stream_name)
+                info = await self.client_conn.xinfo_stream(stream_name)
                 # print(f"Produced Event Info: {info}")
-                time.sleep(1)
+                await asyncio.sleep(1)
                 
                 # increase count for max message limit
                 count += 1 
@@ -92,20 +63,21 @@ class RedisClient(redis.ConnectionPool):
         else:
             print("[WARNING]: Events will be produced infinitely. For stop producing, kill the process.")
             while True:
-                _ = self.client_conn.xadd(name=stream_name, fields=data, id=stream_id)
+                _ = await self.client_conn.xadd(name=stream_name, fields=data, id=stream_id)
                 
                 # Write event info to console.
-                info = self.client_conn.xinfo_stream(stream_name)
+                info = await self.client_conn.xinfo_stream(stream_name)
                 # print(f"Event Info: {info}")
-                time.sleep(1)
-                
-    def consume_event_xread(self, streams: dict, lock_key: str, blocking_time_ms = 5000, count = 1):
+                await asyncio.sleep(1)
+            
+    async def consume_event_xread(self, streams: dict, lock_key: str, blocking_time_ms = 5000, count = 1):
         """This method consumes messages from a Redis Stream infinitly w/out consumer group.
 
         Args:
             streams (dict): {stream_name: stream_id, ...} dict. if you give '>' to stream id,
                  which means that the consumer want to receive only messages that were never delivered to any other consumer.
                  It just means, give me new messages.
+            lock_key (str): Name of the lock key.
             blocking_time_ms (int, optional): Blocking time. Defaults to 5000.
             count (int, optional): if set, only return this many items, beginning with the
                earliest available. Defaults to 1.
@@ -115,11 +87,9 @@ class RedisClient(redis.ConnectionPool):
 
         """
         
-        # Timeout lazım
-        # Sürekli lock'ı control etmesi lazım, lock yoksa belli bir süre dinlemesi lazım. Eğer cevap gelmezse o sürede exception fırlatmak lazım.
-        
-        while self.client_conn.get(lock_key) is not None:
-            resp = self.client_conn.xread(
+        lock_key_status = await self.client_conn.get(lock_key)
+        while lock_key_status is not None:
+            resp = await self.client_conn.xread(
                 streams=streams,
                 count=count,
                 block=blocking_time_ms
@@ -129,12 +99,15 @@ class RedisClient(redis.ConnectionPool):
                 key, messages = resp[0]
                 last_id, data = messages[0]
                 # print(f"Event id: {last_id}")
-                # print(f"Event data {data}")   
-                return {"from-event": resp}        
+                # print(f"Event data {data}")           
+                return {"from-event": resp}
             
-        raise Exception("No event found in stream.")
-                        
-    def create_consumer_group(self, stream_name: str, group_name: str, mkstream=False, id="$"):
+            lock_key_status = await self.client_conn.get(lock_key)
+         
+        raise Exception("Lock is not acquired. Can not consume events from stream.")   
+             
+                
+    async def create_consumer_group(self, stream_name: str, group_name: str, mkstream=False, id="$"):
         """
         This method allows to creates a consumer group for a stream.
         You can create multiple consumer groups for a stream.
@@ -147,15 +120,18 @@ class RedisClient(redis.ConnectionPool):
             id (string): Stream id. Defaults to "$". If "$", it will try to get last id of the stream.
             group_name (string): Name of the consumer group.
         """
-        
+                
         try:
-            resp = self.client_conn.xgroup_create(name=stream_name, id=id, groupname=group_name, mkstream=mkstream)
+            resp = await self.client_conn.xgroup_create(name=stream_name, id=id, groupname=group_name, mkstream=mkstream)
             print(f"Consumer group created Status: {resp}")
-        except redis.exceptions.ResponseError as e:
+        except Exception as e:
             print("Consumer group already exists.")
-            print(f"Consumer group info: {self.client_conn.xinfo_groups(stream_name)}")
-            
-    def consume_event_xreadgroup(
+            info = await self.client_conn.xinfo_groups(stream_name)
+            print(f"Consumer group info: {info}")
+
+        # await self.client_conn.xgroup_setid(stream_key=stream_key, groupname=group_name, id=0) 
+
+    async def consume_event_xreadgroup(
         self,
         streams: dict,
         group_name: str,
@@ -163,7 +139,6 @@ class RedisClient(redis.ConnectionPool):
         blocking_time_ms = 5000,
         count = 1,
         noack=True,
-        timeout: int= None
         ):
         """
         This method consumes messages from a Redis Stream infinitly as consumer group.
@@ -185,9 +160,10 @@ class RedisClient(redis.ConnectionPool):
         Returns:
             Any: Returns consumed events as list of dicts.
         """
-              
+        
+        # While true lock key exist ile değişecek, Timeout policyler belirlenecek  
         while True:
-            resp = self.client_conn.xreadgroup(
+            resp = await self.client_conn.xreadgroup(
                 groupname=group_name,
                 consumername=consumer_name,
                 streams=streams,
@@ -199,13 +175,11 @@ class RedisClient(redis.ConnectionPool):
             if resp:
                 key, messages = resp[0]
                 last_id, data = messages[0]
-                # print(f"Event catched: {resp}")
                 # print(f"Event id: {last_id}")
                 # print(f"Event data {data}")
-                
                 return resp
-            
-    def xtrim_with_id(self, stream_name: str, id: str):
+                           
+    async def xtrim_with_id(self, stream_name: str, id: str):
         """This method allows to delete events from stream w/ trim.
         After deleting events from stream, you can not consume them again.
         For this reason, you should use this method carefully.
@@ -218,14 +192,14 @@ class RedisClient(redis.ConnectionPool):
         Returns:
             Any: Deletion response or Warning message if stream not exists.
         """
-        
-        is_stream_exists = self.client_conn.exists(stream_name)
+                
+        is_stream_exists = await self.client_conn.exists(stream_name)
         if not is_stream_exists:
-            resp = self.client_conn.xtrim(name=stream_name, minid=id)
+            resp = await self.client_conn.execute_command('XTRIM', stream_name, 'MINID', id)
             return resp
         return "WARNING: Stream does not exists..."
-    
-    def produce_event_publish(self, pubsub_channel: str, message: str):
+                    
+    async def produce_event_publish(self, pubsub_channel: str, message: str):
         """
         Send events to pub-sub channel.
 
@@ -234,60 +208,63 @@ class RedisClient(redis.ConnectionPool):
             message (str): Event to publish to subscribers channel
 
         """
-
-        event = self.client_conn.publish(channel=pubsub_channel, message=message)
+        
+        event = await self.client_conn.publish(channel=pubsub_channel, message=message)
         # print(f"event {message} consumed by number of {event} consumers")
         
-    def consume_event_subscriber(self, pubsub_channel: str):
+                
+    async def consume_event_subscriber(self, pubsub_channel: str):
         """
         Firstly it subscribes to pubsub_channel and then when it receives an event, it consumes it.
 
         Args:
             pubsub_channel (str): Name of the pub-sub channel to subscribe which was created by publisher
 
+        Returns:
+            Event: Event from publisher.
         """
-        
+                
         ps = self.client_conn.pubsub()
-        ps.subscribe(pubsub_channel)
-        for raw_message in ps.listen():
+        await ps.subscribe(pubsub_channel)
+        async for raw_message in ps.listen():
             if raw_message['type'] == 'message':
                 result = raw_message['data']
                 return result
                 # yield result
-
-    def acquire_lock(self, lock_key, expire_time=40):
+        
+    async def acquire_lock(self, lock_key: str, expire_time=40):
         """This function allows to assign a lock to a key for distrubuted caching.
 
         Args:
-            lock_key (string): Name of the Lock key.
+            lock_key (_type_): Name of the Lock key.
             expire_time (int, optional): Expire time for lock key. Defaults to 40.
 
         Returns:
             Lock: Redis Lock object.
         """
-             
+        
         lock = self.client_conn.lock(name=lock_key, timeout=expire_time, blocking_timeout=5)
-        acquire = lock.acquire()
+        is_acquired = await lock.acquire(blocking=True, blocking_timeout=0.01)
         return lock
     
-    def is_locked(self, redis_lock: Lock):
-        """Check if lock object is locked or not."""       
-        
-        if redis_lock.locked():
+    async def is_locked(self, redis_lock: Lock):
+        """Check if lock object is locked or not."""
+                
+        if await redis_lock.locked():
             return True
         return False
     
-    def is_owned(self, lock: Lock):
-        """Check if lock object is owned by current process or not."""
+    async def is_owned(self, lock: Lock):
+        """Check if lock object is owned or not."""
         
-        if lock.owned():
+        if await lock.owned():
             return True
         return False
     
-    def release_lock(self, redis_lock: Lock):
-        """Release lock object."""
+    async def release_lock(self, redis_lock: Lock):
+        """Try to release lock object."""
         
-        if self.client_conn.get(redis_lock.name) is not None:
-            _ = redis_lock.release()
+        if await self.client_conn.get(redis_lock.name) is not None:
+            _ = await redis_lock.release()
         else:
             print(f"[FATAL]: Redis Lock does not exists! Possibly it is expired. Increase expire time for Lock.")

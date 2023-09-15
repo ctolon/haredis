@@ -1,19 +1,19 @@
 """Redis/AioRedis Main Wrapper Client Implementations for haredis."""
 
-from ._aioredis_client import AioRedisClient
-from ._aiorediscluster_client import AioRedisClusterClient
-from ._aioredissentinel_client import AioRedisSentinelClient
-from ._redis_client import RedisClient
-from ._rediscluster_client import RedisClusterClient
-from ._redissentinel_client import RedisSentinelClient
+from ._aioharedis_client import AioHaredisClient
+from ._aioharediscluster_client import AioHaredisClusterClient
+from ._aioharedissentinel_client import AioHaredisSentinelClient
+from ._haredis_client import HaredisClient
+from ._harediscluster_client import HaredisClusterClient
+from ._redissentinel_client import HaredisSentinelClient
 
 
 
 __all__ = [
-    "AioRedisClient",
-    "AioRedisClusterClient",
-    "AioRedisSentinelClient",
-    "RedisClient",
-    "RedisClusterClient",
-    "RedisSentinelClient"
+    "AioHaredisClient",
+    "AioHaredisClusterClient",
+    "AioHaredisSentinelClient",
+    "HaredisClient",
+    "HaredisClusterClient",
+    "HaredisSentinelClient"
 ]

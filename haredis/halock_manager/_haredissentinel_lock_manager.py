@@ -9,23 +9,23 @@ import inspect
 
 from redis.asyncio.lock import Lock
 
-from ..client import AioRedisClient
+from ..client import AioHaredisSentinelClient
 
 
-class HAredlockManager(object):
+class HASentinelredlockManager(object):
     """## Redis Lock Release Manager Class for Distributed Caching/Locking in Redis
     This class is used to implement distributed locking in redis using stream api xread/xadd (For both asyncronous/syncronous execution).
     """
 
     def __init__(
         self,
-        aioredis_client: AioRedisClient,
+        aioredis_client: AioHaredisSentinelClient,
         redis_logger: Union[logging.Logger, None] = None
         ):
-        """Constructor for RedisLockReleaseManager for Redis as Standalone.
+        """Constructor for RedisLockReleaseManager for Redis as Sentinel.
 
         Args:
-            aioredis_client (AioRedisClient): AioRedisClient Instance.
+            aioredis_client (AioHaredisClient): AioHaredisClient Instance.
             redis_logger (logging.Logger, optional): Logger Instance. Defaults to None.
         """
         
@@ -166,7 +166,7 @@ class HAredlockManager(object):
         wait_time=10,
         additional_time=10,
         replace_ttl = True,
-        args=tuple(),
+        *args,
         **kwargs
         ):
         """haredis distributed locking algorithm implementation in redis using stream api xread/xadd (For both syncronous/asyncronous execution)

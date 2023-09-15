@@ -9,23 +9,23 @@ import inspect
 
 from redis.asyncio.lock import Lock
 
-from ..client import AioRedisSentinelClient
+from ..client import AioHaredisClusterClient
 
 
-class HASentinelredlockManager(object):
+class HaredisClusterLockRelaseManager(object):
     """## Redis Lock Release Manager Class for Distributed Caching/Locking in Redis
     This class is used to implement distributed locking in redis using stream api xread/xadd (For both asyncronous/syncronous execution).
     """
 
     def __init__(
         self,
-        aioredis_client: AioRedisSentinelClient,
+        aioredis_client: AioHaredisClusterClient,
         redis_logger: Union[logging.Logger, None] = None
         ):
-        """Constructor for RedisLockReleaseManager for Redis as Sentinel.
+        """Constructor for RedisLockReleaseManager for Redis as Cluster.
 
         Args:
-            aioredis_client (AioRedisClient): AioRedisClient Instance.
+            aioredis_client (AioHaredisClient): AioHaredisClusterClient Instance.
             redis_logger (logging.Logger, optional): Logger Instance. Defaults to None.
         """
         
@@ -58,13 +58,13 @@ class HASentinelredlockManager(object):
         await asyncio.sleep(wait_time)
         
         # Check if lock is reacquired from another process, if yes, do not delete event otherwise delete event
-        is_lock_acquired = await self.aioredis_client.client_conn.get(lock_key)
+        is_lock_acquired = await self.aioharedis_client.client_conn.get(lock_key)
         if is_lock_acquired:
             logger.info(f"Event will not be deleted because a lock is reacquired.")
             return None
         
         # Delete event
-        deleted = await self.aioredis_client.client_conn.xdel(stream_key, event_id)
+        deleted = await self.aioharedis_client.client_conn.xdel(stream_key, event_id)
         if deleted == 1:
             logger.info(f"Event deleted after produce: {event_info}")
         else:
@@ -89,7 +89,7 @@ class HASentinelredlockManager(object):
         
         # While lock is acquired, call lock time extender consumer
         while is_locked:
-            consume = await self.aioredis_client.client_conn.xread(streams=streams, count=1, block=5000)
+            consume = await self.aioharedis_client.client_conn.xread(streams=streams, count=1, block=5000)
             
             # Retrieve data from event
             if len(consume) > 0:
@@ -129,7 +129,7 @@ class HASentinelredlockManager(object):
         """
         
         self.redis_logger.warning(f"Lock key: {lock_key} acquire failed. Result will be tried to retrieve from consumer")
-        result = await self.aioredis_client.consume_event_xread(streams=streams, lock_key=lock_key, blocking_time_ms=blocking_time_ms)
+        result = await self.aioharedis_client.consume_event_xread(streams=streams, lock_key=lock_key, blocking_time_ms=blocking_time_ms)
                 
         if "from-event" in result.keys():
             
@@ -138,7 +138,7 @@ class HASentinelredlockManager(object):
             key, messages = result[0]
             last_id, event_data = messages[0]
             data = event_data["result"]
-            event_info = await self.aioredis_client.client_conn.xinfo_stream(stream_key)
+            event_info = await self.aioharedis_client.client_conn.xinfo_stream(stream_key)
             self.redis_logger.info(f"Event Received from producer: {event_info}")
             
             if isinstance(data, str) and data == "null":
@@ -166,7 +166,7 @@ class HASentinelredlockManager(object):
         wait_time=10,
         additional_time=10,
         replace_ttl = True,
-        *args,
+        args=tuple(),
         **kwargs
         ):
         """haredis distributed locking algorithm implementation in redis using stream api xread/xadd (For both syncronous/asyncronous execution)
@@ -204,9 +204,9 @@ class HASentinelredlockManager(object):
         loop = asyncio.get_event_loop()
         
         # Acquire lock
-        lock = await self.aioredis_client.acquire_lock(lock_key, expire_time)
-        is_locked = await self.aioredis_client.is_locked(lock)
-        is_owned = await self.aioredis_client.is_owned(lock)
+        lock = await self.aioharedis_client.acquire_lock(lock_key, expire_time)
+        is_locked = await self.aioharedis_client.is_locked(lock)
+        is_owned = await self.aioharedis_client.is_owned(lock)
                
         # If lock is not owned by current process, call consumer otherwise call producer         
         if is_owned:
@@ -243,11 +243,11 @@ class HASentinelredlockManager(object):
                     self.redis_logger.error(f"Result is exception. Lock key: {lock_key} will be released. Exception: {result}")
                     raw_data = f"RedException:{result}"
                     event_data = {"result": raw_data}
-                    _ = await self.aioredis_client.produce_event_xadd(stream_name=stream_key, data=event_data, maxlen=1)
-                    event_info = await self.aioredis_client.client_conn.xinfo_stream(stream_key)
+                    _ = await self.aioharedis_client.produce_event_xadd(stream_name=stream_key, data=event_data, maxlen=1)
+                    event_info = await self.aioharedis_client.client_conn.xinfo_stream(stream_key)
                     event_id = event_info["last-entry"][0]
                     self.redis_logger.info(f"Event produced to notify consumers: {event_info}")
-                    await self.aioredis_client.release_lock(lock)
+                    await self.aioharedis_client.release_lock(lock)
                     asyncio.ensure_future(self._aio_delete_event(stream_key, lock_key, event_id, event_info, self.redis_logger, wait_time), loop=loop) 
                     return raw_data
                 
@@ -256,22 +256,22 @@ class HASentinelredlockManager(object):
                     self.redis_logger.warning(f"Result is empty. Lock key: {lock_key} will be released")
                     raw_data = "null"
                     event_data = {"result": raw_data}
-                    _ = await self.aioredis_client.produce_event_xadd(stream_name=stream_key, data=event_data, maxlen=1)
-                    event_info = await self.aioredis_client.client_conn.xinfo_stream(stream_key)
+                    _ = await self.aioharedis_client.produce_event_xadd(stream_name=stream_key, data=event_data, maxlen=1)
+                    event_info = await self.aioharedis_client.client_conn.xinfo_stream(stream_key)
                     event_id = event_info["last-entry"][0]
                     self.redis_logger.info(f"Event produced to notify consumers: {event_info}")
-                    await self.aioredis_client.release_lock(lock)
+                    await self.aioharedis_client.release_lock(lock)
                     asyncio.ensure_future(self._aio_delete_event(stream_key, lock_key, event_id, event_info, self.redis_logger, wait_time), loop=loop) 
                     return null_handler
                 
                 # If everything is ok, serialize data, produce event to consumers and finally release lock
                 event_data = {"result": json.dumps(result)}
-                _ = await self.aioredis_client.produce_event_xadd(stream_name=stream_key, data=event_data, maxlen=1)
-                event_info = await self.aioredis_client.client_conn.xinfo_stream(stream_key)
+                _ = await self.aioharedis_client.produce_event_xadd(stream_name=stream_key, data=event_data, maxlen=1)
+                event_info = await self.aioharedis_client.client_conn.xinfo_stream(stream_key)
                 event_id = event_info["last-entry"][0]
                 # event_data = event_info["last-entry"][1]
                 self.redis_logger.info(f"Event produced to notify consumers: {event_info}")
-                await self.aioredis_client.release_lock(lock)
+                await self.aioharedis_client.release_lock(lock)
                 asyncio.ensure_future(self._aio_delete_event(stream_key, lock_key, event_id, event_info, self.redis_logger, wait_time), loop=loop) 
         else:
             result = await self._aiocall_consumer(lock_key, streams, blocking_time_ms, null_handler, stream_key)

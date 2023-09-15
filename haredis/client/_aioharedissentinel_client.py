@@ -1,49 +1,49 @@
+"""haredis AioRedis Sentinel Client Implementation."""
 import asyncio
 
+from redis.asyncio import sentinel
 from redis import asyncio as aioredis
-from redis.asyncio.cluster import RedisCluster
 from redis.asyncio.lock import Lock
 
 
-class AioRedisClusterClient(RedisCluster):
+class AioHaredisSentinelClient(sentinel.SentinelConnectionPool):
     """
-    RedisCluster Client Implementation with Async API. It inherits from RedisCluster class and it has extra implementations.
+    ...
     """
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         try:
-            self.client_conn: RedisCluster = RedisCluster(*args, **kwargs)
+            self.sentinel_conn = sentinel.Sentinel(connection_pool=self)
         except aioredis.ConnectionError as e:
             print(f"Error connecting to Redis: {e}")
 
-    async def connection_test(self, *args, **kwargs):
-        """Main client connection method. It creates RedisCluster Instance."""
-        
+    async def connect_client(self, *args, **kwargs):
+        """Main connection method. It creates Redis Instance."""
+
         try:
+            host, port = await self.sentinel_conn.discover_master(kwargs.get("service_name"))
+            self.client_conn = aioredis.Redis(*args, **kwargs)
             await self.client_conn.initialize()
-            _ = await self.ping()
+            _ = await self.client_conn.ping()
             print(f"Ping Response on Redis Client: {_}")
-            print("Connected to Redis Cluster with Async API.")
+            print("Connected to Redis Sentinel with async API.")
         except Exception as e:
-            print(f"Error connecting to Redis Cluster: {e}")
+            print(f"Error connecting to Redis Sentinel: {e}")
 
     async def close_client(self):
-        """Close Redis Connection."""
-        
-        if self.client_conn:
-            await self.client_conn.close()
-            print("Disconnected from Redis Cluster.")
-        else:
-            print("No active connection pool to close.")
-            
-    async def get_aioredis_cluster_client(self):
-        """Get Aio Redis Cluster Manager."""
-        
+        """Close AioRedis connection."""
+        await self.disconnect(inuse_connections=True)
+        await self.client_conn.close(self)
+
+        print("Disconnected from Redis.")
+                        
+    async def get_aioredis_sentinel_client(self):
+        """Get AioRedis Sentinel Client as Connection Pool."""
         return self
-    
-    def get_native_redis_cluster(self) -> RedisCluster:
-        """Get Native RedisCluster Instance."""
+
+    async def get_native_aioredis(self) -> aioredis.Redis:
+        """Get Native AioRedis Instance."""
         
         return self.client_conn
 

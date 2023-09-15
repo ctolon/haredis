@@ -4,10 +4,36 @@ import asyncio
 import uvicorn
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
-from haredis.client import RedisClient, AioRedisClient
+from haredis.client import HaredisClient, AioHaredisClient
+import redis
+from redis import asyncio as aioredis
 
 from routes.event import router as event_router
 from config import RedisSettings, APISettings
+
+async def create_aioredis_pool() -> aioredis.ConnectionPool:
+    return aioredis.ConnectionPool(
+        #host=RedisSettings.HOST,
+        host="0.0.0.0",
+        port=RedisSettings.PORT,
+        db=RedisSettings.DB,
+        password=RedisSettings.PASSWORD,
+        decode_responses=True,
+        encoding="utf-8",
+        max_connections=2**31
+    )
+    
+def create_redis_pool() -> redis.ConnectionPool:
+    return redis.ConnectionPool(
+        # host=RedisSettings.HOST,
+        host="0.0.0.0",
+        port=RedisSettings.PORT,
+        db=RedisSettings.DB,
+        password=RedisSettings.PASSWORD,
+        decode_responses=True,
+        encoding="utf-8",
+        max_connections=2**31
+    )
 
 
 def get_application() -> FastAPI:
@@ -32,49 +58,36 @@ app = get_application()
 @app.on_event("startup")
 async def startup_event():
         
-    #loop = safe_set_event_loop()
-    #print("Event loop started.")
-    #app.state.loop = loop
+    # Create Redis Connection Pools
+    redis_pool = create_redis_pool()
+    aioredis_pool = await create_aioredis_pool()
+    
+    # Create Redis Clients
+    app.state.redis = redis.Redis(connection_pool=redis_pool)
+    app.state.aioredis = aioredis.Redis(connection_pool=aioredis_pool)
         
-    redis_client = RedisClient(
-        #host=RedisSettings.HOST,
-        host="0.0.0.0",
-        port=RedisSettings.PORT,
-        db=RedisSettings.DB,
-        password=RedisSettings.PASSWORD,
-        decode_responses=True,
-        encoding="utf-8",
-        max_connections=2**31
-        )
+    # Check Redis Connections
+    ping = app.state.redis.ping()
+    if not ping:
+        raise Exception("Redis Connection Error!")
+    print("Redis Connection OK!")
     
-    aioredis_client = AioRedisClient(
-        host="0.0.0.0",
-        port=RedisSettings.PORT,
-        db=RedisSettings.DB,
-        password=RedisSettings.PASSWORD,
-        decode_responses=True,
-        encoding="utf-8",
-        max_connections=2**31
-        )
-    
-    redis_client.connection_test()
-    await aioredis_client.connection_test()
-    
-    app.state.aioredis = await aioredis_client.get_aioredis_client()  
-    app.state.redis = redis_client.get_redis_client()
+    ping = await app.state.aioredis.ping()
+    if not ping:
+        raise Exception("AioRedis Connection Error!")
+    print("AioRedis Connection OK!")
+                    
+    # Create Haredis Clients
+    app.state.haredis = HaredisClient(client_conn=app.state.redis)
+    app.state.aioharedis = AioHaredisClient(client_conn=app.state.aioredis)
     
 
 @app.on_event("shutdown")
 async def shutdown_event():
     
-    #if app.state.loop.is_running():
-        #print("WARNING: Event loop is still running. It will be closed.")
-        #app.state.loop.stop()
-        # app.state.loop.close()
-        # print("Event loop closed.")
-    
-    await app.state.aioredis.close_client()
-    app.state.redis.close_client()
+    # Close Redis Clients    
+    await app.state.aioredis.close()
+    app.state.redis.close()
 
 
 app.include_router(event_router, prefix="/haredis")

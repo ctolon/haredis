@@ -5,7 +5,7 @@ from redis.lock import Lock
 # https://stackoverflow.com/questions/45885881/how-to-create-redis-python-client-from-sentinel-url
 
 
-class RedisSentinelClient(sentinel.SentinelConnectionPool):
+class HaredisSentinelClient(sentinel.SentinelConnectionPool):
     """
     Redis Sentinel Manager (Opens one session for many operations)
     example startup_nodes: startup_nodes = [{"host": "127.0.0.1", "port": "7000"}]
