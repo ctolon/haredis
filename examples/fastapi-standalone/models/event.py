@@ -80,13 +80,16 @@ class EventModel(metaclass=Singleton):
     
     @RL_MANAGER.aio_lock_release_decorator(
         keys_to_lock=("param1", "param2"),
-        lock_extender_suffix="lock_extender",
-        blocking_time_ms=1000 * 2,
+        lock_key_prefix=None,
+        lock_expire_time=30,
+        consumer_blocking_time=1000 * 2,
         null_handler={},
-        expire_time=30,
-        wait_time=10,
-        additional_time=10,
-        replace_ttl=True
+        run_with_lock_time_extender=True,
+        lock_time_extender_suffix="lock_extender",
+        lock_time_extender_add_time=10,
+        lock_time_extender_blocking_time=5 * 1000,
+        lock_time_extender_replace_ttl=True,
+        delete_event_wait_time=10,
     )   
     async def async_event_decorated(self, *args, **kwargs):
         
@@ -112,13 +115,16 @@ class EventModel(metaclass=Singleton):
     
     @RL_MANAGER.aio_lock_release_decorator(
         keys_to_lock=("param1", "param2"),
-        lock_extender_suffix="lock_extender",
-        blocking_time_ms=1000 * 2,
+        lock_key_prefix=None,
+        lock_expire_time=30,
+        consumer_blocking_time=1000 * 2,
         null_handler={},
-        expire_time=30,
-        wait_time=10,
-        additional_time=10,
-        replace_ttl=True
+        run_with_lock_time_extender=True,
+        lock_time_extender_suffix="lock_extender",
+        lock_time_extender_add_time=10,
+        lock_time_extender_blocking_time=5 * 1000,
+        lock_time_extender_replace_ttl=True,
+        delete_event_wait_time=10,
     )
     def sync_event_decorated(self, *args, **kwargs):
         
@@ -152,13 +158,16 @@ class EventModel(metaclass=Singleton):
     
     @RL_MANAGER.aio_lock_release_decorator(
         keys_to_lock=("param1", "param2"),
-        lock_extender_suffix="lock_extender",
-        blocking_time_ms=1000 * 2,
+        lock_key_prefix=None,
+        lock_expire_time=30,
+        consumer_blocking_time=1000 * 2,
         null_handler={},
-        expire_time=30,
-        wait_time=10,
-        additional_time=10,
-        replace_ttl=True
+        run_with_lock_time_extender=True,
+        lock_time_extender_suffix="lock_extender",
+        lock_time_extender_add_time=10,
+        lock_time_extender_blocking_time=5 * 1000,
+        lock_time_extender_replace_ttl=True,
+        delete_event_wait_time=10,
     )
     async def sync_event_decorated_2(self, *args, **kwargs):
         return await self.sync_event(*args, **kwargs)
