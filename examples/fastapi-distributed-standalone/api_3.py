@@ -93,9 +93,9 @@ if __name__ == '__main__':
     
     # For Development
     uvicorn.run(
-        "api:app",
+        "api_3:app",
         host=APISettings.HOST,
-        port=APISettings.PORT,
+        port=APISettings.PORT + 2,
         log_level="info",
         reload=True
     )

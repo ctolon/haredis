@@ -10,8 +10,6 @@ import platform
 
 from setuptools import Command, setup
 
-import haredis
-
 DISTNAME = "haredis"
 DESCRIPTION = "Python Module which wraps Redis ...."
 with open("README.md") as f:
@@ -20,14 +18,13 @@ MAINTAINER = "Cevat Batuhan Tolon"
 MAINTAINER_EMAIL = "cevat.batuhan.tolon@cern.ch"
 #URL = ""
 DOWNLOAD_URL = "https://pypi.org/project/haredis/#files"
-LICENSE = "new BSD"
+LICENSE = "Apache 2.0"
 PROJECT_URLS = {
     "Bug Tracker": "https://github.com/haredis/haredis/issues",
     "Documentation": "https://www.haredis.com",
     "Source Code": "https://github.com/ctolon/haredis",
 }
-
-VERSION = haredis.__version__
+VERSION = "0.0.1"
 
 class InvalidVersion(ValueError):
     """
@@ -40,7 +37,7 @@ def parse(version: str):
     try:
         version.split(".")
     except InvalidVersion:
-        return InvalidVersion(f"Version is invalid: {version}")
+        return InvalidVersion("Version is invalid: {version}".format(version=version))
 
 # Custom clean command to remove build artifacts
 class CleanCommand(Command):
@@ -94,24 +91,28 @@ def setup_package():
     metadata = dict(
         name=DISTNAME,
         maintainer=MAINTAINER,
+        author=MAINTAINER,
         maintainer_email=MAINTAINER_EMAIL,
+        author_email=MAINTAINER_EMAIL,
         description=DESCRIPTION,
+        long_description=LONG_DESCRIPTION,
         license=LICENSE,
         #url=URL,
         download_url=DOWNLOAD_URL,
         project_urls=PROJECT_URLS,
         version=VERSION,
-        long_description=LONG_DESCRIPTION,
         package_dir={"haredis": "haredis"},
+        keywords=["redis", "aioredis", "lock-relase", "high availability", "distributed systems", "streaming api"],
         # packages=find_packages(),
         classifiers=[
-            "Intended Audience :: Science/Research",
             "Intended Audience :: Developers",
-            "License :: OSI Approved :: BSD License",
+            'Natural Language :: English'
+            "License :: OSI Approved :: Apache Software License",
             "Programming Language :: Python",
             "Topic :: Software Development",
+            'Topic :: System :: Distributed Computing',
             "Topic :: Scientific/Engineering",
-            "Development Status :: 5 - Production/Stable",
+            "Development Status :: 4 - Beta",
             "Operating System :: Microsoft :: Windows",
             "Operating System :: POSIX",
             "Operating System :: Unix",
@@ -124,13 +125,14 @@ def setup_package():
             "Programming Language :: Python :: 3.10",
             "Programming Language :: Python :: 3.11",
             "Programming Language :: Python :: 3.12",
+            'Framework :: AsyncIO'
         ],
         cmdclass=cmdclass,
         python_requires=python_requires,
-        install_requires=['redis'],
+        install_requires=['redis>=4'],
         package_data={"": ["*.csv", "*.gz", "*.txt", "*.pxd", "*.md", "*.jpg"]},
         zip_safe=False,  # the package can run out of an .egg file
-        extras_require={"with_celery": ["celery"]}
+        # extras_require={"with_celery": ["celery"]}
     )
     
     commands = [arg for arg in sys.argv[1:] if not arg.startswith("-")]

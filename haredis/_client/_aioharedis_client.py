@@ -1,4 +1,5 @@
 """HARedis AioRedis Client Implementation."""
+import logging
 import asyncio
 from typing import Union
 
@@ -11,7 +12,7 @@ class AioHaredisClient:
     haredis client class for redis async api.
     """
     
-    def __init__(self, client_conn: Union[aioredis.StrictRedis, aioredis.Redis]):
+    def __init__(self, client_conn: Union[aioredis.StrictRedis, aioredis.Redis], redis_logger: logging.Logger = None):
         """Constructor method for HaredisClient class.
 
         Args:
@@ -25,6 +26,17 @@ class AioHaredisClient:
         if type(self.__client_conn) not in (aioredis.StrictRedis, aioredis.Redis):
             raise TypeError("Client connection must be redis.StrictRedis or redis.Redis")
         
+        self.__redis_logger = redis_logger        
+
+        
+        if not self.__redis_logger:
+            self.__redis_logger = logging.getLogger('dummy')
+            self.__redis_logger.setLevel(logging.CRITICAL)
+            self.__redis_logger.addHandler(logging.NullHandler())
+            
+        if self.__redis_logger and not isinstance(self.__redis_logger, logging.Logger):
+            raise TypeError("redis_logger must be instance of logging.Logger.")
+        
         
     @property
     def client_conn(self):
@@ -35,6 +47,16 @@ class AioHaredisClient:
         """
         
         return self.__client_conn
+    
+    @property
+    def redis_logger(self):
+        """Getter method for redis logger.
+
+        Returns:
+            logging.Logger: Redis logger.
+        """
+        
+        return self.__redis_logger
                 
     # Producer - Consumer Implementation for streams API
     async def produce_event_xadd(self, stream_name: str, data: dict, max_messages = 1, maxlen=1, stream_id="*"):
@@ -72,7 +94,7 @@ class AioHaredisClient:
         
         # Add event to stream infinitely.
         else:
-            print("[WARNING]: Events will be produced infinitely. For stop producing, kill the process.")
+            self.redis_logger.warning("Events will be produced infinitely. For stop producing, kill the process.")
             while True:
                 _ = await self.client_conn.xadd(name=stream_name, fields=data, id=stream_id)
                 
@@ -81,7 +103,18 @@ class AioHaredisClient:
                 # print(f"Event Info: {info}")
                 await asyncio.sleep(1)
             
-    async def consume_event_xread(self, streams: dict, lock_key: str, blocking_time_ms = 5000, count = 1):
+    async def consume_event_xread(
+        self,
+        streams: dict,
+        lock_key: str,
+        blocking_time_ms = 5000,
+        count = 1,
+        do_retry = True,
+        retry_count = 5,
+        retry_blocking_time_ms = 2 * 1000,
+        max_re_retry = 2
+        
+        ):
         """This method consumes messages from a Redis Stream infinitly w/out consumer group.
 
         Args:
@@ -92,32 +125,66 @@ class AioHaredisClient:
             blocking_time_ms (int, optional): Blocking time. Defaults to 5000.
             count (int, optional): if set, only return this many items, beginning with the
                earliest available. Defaults to 1.
+            do_retry (bool, optional): If True, it will retry to acquire lock. Defaults to True.
+            retry_count (int, optional): Retry count. Defaults to 5.
+            retry_blocking_time_ms (int, optional): Retry blocking time in miliseconds. Defaults to 2 * 1000.
+            max_re_retry (int, optional): Max re-retry count for lock release problem. Defaults to 2.
                
         Returns:
             Any: Returns consumed events as list of dicts.
 
         """
         
-        lock_key_status = await self.client_conn.get(lock_key)
-        while lock_key_status is not None:
+        re_retry_counter = 0
+        
+        while True:
+            
             resp = await self.client_conn.xread(
                 streams=streams,
                 count=count,
                 block=blocking_time_ms
             )
-            
+        
             if resp:
                 key, messages = resp[0]
-                last_id, data = messages[0]
-                # print(f"Event id: {last_id}")
-                # print(f"Event data {data}")           
+                # last_id, data = messages[0]           
                 return {"from-event": resp}
             
             lock_key_status = await self.client_conn.get(lock_key)
-         
-        raise Exception("Lock is not acquired. Can not consume events from stream.")   
-             
+                        
+            if lock_key_status is None:
                 
+                # If max_retry is reached, raise exception
+                if re_retry_counter == max_re_retry:
+                    raise Exception("Max re-retry count reached for Consumer.")
+                
+                # If not do_retry when lock released, raise exception directly
+                if not do_retry:
+                    raise Exception("Redis Lock is released! Consumer can't be consume events from stream.")
+                
+                self.redis_logger.warning("Lock is not acquired or released! Consumer will retry consume events from stream again in {retry_count} \
+                    times with {retry_blocking_time_ms} seconds blocking..".format(retry_count=retry_count, retry_blocking_time_ms=retry_blocking_time_ms))
+                
+                # Wait for retry_blocking_time_ms seconds
+                for i in range(retry_count+1):
+                    i_plus_one = i + 1
+                    if i == retry_count:
+                        raise Exception("Max retry count reached for Consumer.")
+                    
+                    self.redis_logger.info("Retrying to get redis lock: {i_plus_one}.time".format(i_plus_one=i_plus_one))
+                    
+                    # Wait for retry_blocking_time_ms seconds
+                    await asyncio.sleep({retry_blocking_time_ms}/1000)
+                    
+                    # Query lock key status again for retry, if lock key is reacquired, break the loop
+                    # And go to the beginning of the while loop after incrementing retry_counter
+                    lock_key_status = await self.client_conn.get(lock_key)
+                    if lock_key_status:
+
+                        self.redis_logger.info("New redis lock obtained after retrying {i_plus_one} time. Consumer will be retry to consume events from stream.".format(i_plus_one=i_plus_one))
+                        re_retry_counter = re_retry_counter + 1
+                        break
+             
     async def create_consumer_group(self, stream_name: str, group_name: str, mkstream=False, id="$"):
         """
         This method allows to creates a consumer group for a stream.
@@ -134,11 +201,11 @@ class AioHaredisClient:
                 
         try:
             resp = await self.client_conn.xgroup_create(name=stream_name, id=id, groupname=group_name, mkstream=mkstream)
-            print(f"Consumer group created Status: {resp}")
+            self.redis_logger.info("Consumer group created Status: {resp}".format(resp=resp))
         except Exception as e:
-            print("Consumer group already exists.")
+            self.redis_logger.warning("Consumer group already exists. {e}".format(e=e))
             info = await self.client_conn.xinfo_groups(stream_name)
-            print(f"Consumer group info: {info}")
+            self.redis_logger.info("Consumer group info: {info}".format(info=info))
 
         # await self.client_conn.xgroup_setid(stream_key=stream_key, groupname=group_name, id=0) 
 
@@ -189,6 +256,12 @@ class AioHaredisClient:
                 # print(f"Event id: {last_id}")
                 # print(f"Event data {data}")
                 return resp
+            
+    async def get_last_stream_id(self, stream_name: str):
+        """Get Last Stream Id from stream."""
+        
+        last_id = await self.client_conn.xrevrange(stream_name, count=1)
+        return last_id[0][0]
                            
     async def xtrim_with_id(self, stream_name: str, id: str):
         """This method allows to delete events from stream w/ trim.
@@ -254,7 +327,7 @@ class AioHaredisClient:
             Lock: Redis Lock object.
         """
         
-        lock = self.client_conn.lock(name=lock_key, timeout=expire_time, blocking_timeout=5)
+        lock = self.client_conn.lock(name=lock_key, timeout=expire_time, blocking_timeout=5, thread_local=True)
         is_acquired = await lock.acquire(blocking=True, blocking_timeout=0.01)
         return lock
     
@@ -278,4 +351,4 @@ class AioHaredisClient:
         if await self.client_conn.get(redis_lock.name) is not None:
             _ = await redis_lock.release()
         else:
-            print(f"[FATAL]: Redis Lock does not exists! Possibly it is expired. Increase expire time for Lock.")
+            self.redis_logger.warning("Redis Lock does not exists! Possibly it is expired. Increase expire time for Lock.")

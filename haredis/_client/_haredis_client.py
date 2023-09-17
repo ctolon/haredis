@@ -1,4 +1,5 @@
 """HARedis Redis Client Implementation with Sync API."""
+import logging
 import time
 from typing import Union
 
@@ -10,7 +11,7 @@ class HaredisClient:
     """
     Redis Client Implementation with Sync API. It inherits from main redis.StrictRedis class and it has extra implementations.
     """
-    def __init__(self, client_conn: Union[redis.StrictRedis, redis.Redis]):
+    def __init__(self, client_conn: Union[redis.StrictRedis, redis.Redis], redis_logger: logging.Logger = None):
         """Constructor method for HaredisClient class.
 
         Args:
@@ -24,6 +25,17 @@ class HaredisClient:
         if type(self.__client_conn) not in (redis.StrictRedis, redis.Redis):
             raise TypeError("Client connection must be redis.StrictRedis or redis.Redis")
         
+        self.__redis_logger = redis_logger        
+
+        
+        if not self.__redis_logger:
+            self.__redis_logger = logging.getLogger('dummy')
+            self.__redis_logger.setLevel(logging.CRITICAL)
+            self.__redis_logger.addHandler(logging.NullHandler())
+            
+        if self.__redis_logger and not isinstance(self.__redis_logger, logging.Logger):
+            raise TypeError("redis_logger must be instance of logging.Logger.")
+        
         
     @property
     def client_conn(self):
@@ -34,6 +46,16 @@ class HaredisClient:
         """
         
         return self.__client_conn
+    
+    @property
+    def redis_logger(self):
+        """Getter method for redis logger.
+
+        Returns:
+            logging.Logger: Redis logger.
+        """
+        
+        return self.__redis_logger
         
     def produce_event_xadd(self, stream_name: str, data: dict, max_messages = 1, maxlen=1, stream_id="*"):
         """
@@ -72,7 +94,7 @@ class HaredisClient:
         
         # Add event to stream infinitely.
         else:
-            print("[WARNING]: Events will be produced infinitely. For stop producing, kill the process.")
+            self.redis_logger.warning("Events will be produced infinitely. For stop producing, kill the process.")
             while True:
                 _ = self.client_conn.xadd(name=stream_name, fields=data, id=stream_id)
                 
@@ -132,10 +154,11 @@ class HaredisClient:
         
         try:
             resp = self.client_conn.xgroup_create(name=stream_name, id=id, groupname=group_name, mkstream=mkstream)
-            print(f"Consumer group created Status: {resp}")
+            self.redis_logger.info("Consumer group created Status: {resp}".format(resp=resp))
         except redis.exceptions.ResponseError as e:
-            print("Consumer group already exists.")
-            print(f"Consumer group info: {self.client_conn.xinfo_groups(stream_name)}")
+            self.redis_logger.warning("Consumer group already exists. Error: {e}".format(e=e))
+            info = self.client_conn.xinfo_groups(stream_name)
+            self.redis_logger.info("Consumer group info: {info}".format(info=info))
             
     def consume_event_xreadgroup(
         self,
@@ -272,4 +295,4 @@ class HaredisClient:
         if self.client_conn.get(redis_lock.name) is not None:
             _ = redis_lock.release()
         else:
-            print(f"[FATAL]: Redis Lock does not exists! Possibly it is expired. Increase expire time for Lock.")
+            self.redis_logger.warning("Redis Lock does not exists! Possibly it is expired. Increase expire time for Lock.")

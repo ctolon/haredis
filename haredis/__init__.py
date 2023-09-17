@@ -3,22 +3,22 @@ haredis: Redis/AioRedis extension module for Python
 ==================================
 
 haredis is a Python module integrating redis/aioredis
-lock-release algorithms with simple way.
+lock-release algorithms with a simple way in High Availability.
 
 It aims to provide simple and efficient solutions to lock-release problems
 with streaming API.
-
 """
 
-import logging
+# --------------------------------------------------------------------------- #
+#                                                                             #
+#   Copyright © 2023, Cevat Batuhan Tolon, original author.                   #
+#                                                                             #
+# --------------------------------------------------------------------------- #
 
-logger = logging.getLogger(__name__)
-
-__version__ = "0.0.1"
-
+from ._haredis_lock_release_manager import HaredisLockRelaseManager
+from ._set_up_logging import set_up_logging
 
 __all__ = [
-    "client",
-    "core",
-    "object",
+    "HaredisLockRelaseManager",
+    "set_up_logging",
 ]

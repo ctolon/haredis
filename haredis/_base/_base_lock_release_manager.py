@@ -4,11 +4,7 @@ from typing import Callable, Union, Any
 import logging
 import json
 import asyncio
-import functools
 from functools import partial
-import inspect
-import threading
-import os
 
 import redis
 from redis import asyncio as aioredis
@@ -41,12 +37,12 @@ class _BaseLockRelaseManager(object):
         self.__redis_logger = redis_logger        
 
         
-        if not self.redis_logger:
-            self.redis_logger = logging.getLogger('dummy')
-            self.redis_logger.setLevel(logging.CRITICAL)
-            self.redis_logger.addHandler(logging.NullHandler())
+        if not self.__redis_logger:
+            self.__redis_logger = logging.getLogger('dummy')
+            self.__redis_logger.setLevel(logging.CRITICAL)
+            self.__redis_logger.addHandler(logging.NullHandler())
             
-        if self.redis_logger and not isinstance(self.redis_logger, logging.Logger):
+        if self.redis_logger and not isinstance(self.__redis_logger, logging.Logger):
             raise TypeError("redis_logger must be instance of logging.Logger.")
         
     @property
@@ -86,15 +82,15 @@ class _BaseLockRelaseManager(object):
             raise ValueError("delete_event_wait_time must be greater than 1 or must be equals to 1.")
         
         # Wait for provided seconds for delete event
-        # self.redis_logger.info(f"Event will be deleted after {delete_event_wait_time} seconds if lock is not acquired.")
-        self.redis_logger.info(f"Event will be deleted after {delete_event_wait_time} seconds.")
+        self.redis_logger.info("Event will be deleted after {delete_event_wait_time} seconds."
+                               .format(delete_event_wait_time=delete_event_wait_time))
         await asyncio.sleep(delete_event_wait_time)
         
-        # Check if lock is reacquired from another process. If true, do not delete event else delete event
-        # TODO: event id's are unique for each event. So, we can check if event is deleted or not by checking event id's
-        # is_lock_acquired = await self.aioharedis_client.client_conn.get(lock_key)
-        # if is_lock_acquired:
-        #     logger.info(f"Event will not be deleted because a lock is reacquired.")
+        # TODO event id's are unique for each event. So, we can check if event is deleted or not by checking event id's
+        # self.redis_logger.info(f"Event will be deleted after {delete_event_wait_time} seconds if lock is not acquired.")
+        # while await self.aioharedis_client.client_conn.get(lock_key):
+        #     self.redis_logger.info(f"Event will not be deleted because a lock is reacquired. Waiting for 5 more seconds.")
+        #     await asyncio.sleep(5)
         #     return None
         
         # Delete event
@@ -102,9 +98,11 @@ class _BaseLockRelaseManager(object):
         
         # Check if event is deleted
         if _ == 1:
-            self.redis_logger.info(f"Event deleted after produce: {event_info}")
+            self.redis_logger.info("Event deleted after produce: {event_info}"
+                                   .format(event_info=event_info))
         else:
-            self.redis_logger.warning(f"Event not deleted after produce: {event_info}")
+            self.redis_logger.warning("Event not deleted after produce: {event_info}"
+                                      .format(event_info=event_info))
             
     async def warn_aio_lock_time_extender(
         self,
@@ -148,16 +146,23 @@ class _BaseLockRelaseManager(object):
         
         # Type check if run with lock time extender is True
         if not (isinstance(lock_time_extender_add_time, int) or isinstance(lock_time_extender_add_time, float)):
-            raise TypeError(f"lock_time_extender_add_time must be integer or float. Found: {type(lock_time_extender_add_time)}")
+            type_lock_time_extender_add_time = type(lock_time_extender_add_time)
+            raise TypeError("lock_time_extender_add_time must be integer or float. Found: {type_lock_time_extender_add_time}"
+                            .format(type_lock_time_extender_add_time=type_lock_time_extender_add_time))
         
         if not isinstance(lock_time_extender_blocking_time, int):
-            raise TypeError(f"lock_time_extender_blocking_time must be integer. Found: {type(lock_time_extender_blocking_time)}")
+            type_lock_time_extender_blocking_time = type(lock_time_extender_blocking_time)
+            raise TypeError("lock_time_extender_blocking_time must be integer. Found: {type_lock_time_extender_blocking_time}"
+                            .format(type_lock_time_extender_blocking_time=type_lock_time_extender_blocking_time))
         
         if not isinstance(lock_time_extender_replace_ttl, bool):
-            raise TypeError(f"lock_time_extender_replace_ttl must be boolean. Found: {type(lock_time_extender_replace_ttl)}")
+            type_lock_time_extender_replace_ttl = type(lock_time_extender_replace_ttl)
+            raise TypeError("lock_time_extender_replace_ttl must be boolean. Found: {type_lock_time_extender_replace_ttl}"
+                            .format(type_lock_time_extender_replace_ttl=type_lock_time_extender_replace_ttl))
     
         if lock_time_extender_add_time < 1:
-            raise ValueError(f"lock_time_extender_add_time must be greater than 1. Found: {lock_time_extender_add_time}")
+            raise ValueError("lock_time_extender_add_time must be greater than 1. Found: {lock_time_extender_add_time}"
+                             .format(lock_time_extender_add_time=lock_time_extender_add_time))
         
         if lock_time_extender_blocking_time < 1:
             raise ValueError("lock_time_extender_blocking_time must be greater than 1.")
@@ -166,9 +171,14 @@ class _BaseLockRelaseManager(object):
             raise ValueError("lock_time_extender_blocking_time must be less than lock_time_extender_add_time.")
 
  
-        lock_extend_stream_key = f"{consumer_stream_key}.{lock_time_extender_suffix}"
+        lock_extend_stream_key = "{consumer_stream_key}.{lock_time_extender_suffix}".format(
+            consumer_stream_key=consumer_stream_key,
+            lock_time_extender_suffix=lock_time_extender_suffix
+            )
         streams = {lock_extend_stream_key: "$"}
         is_locked = await lock.locked()
+        
+        # TODO maybe implement lock token based lock time extender here and delete execute_with layers.
         
         # While lock is acquired, call lock time extender consumer
         while is_locked:
@@ -176,7 +186,8 @@ class _BaseLockRelaseManager(object):
             
             # Retrieve data from event
             if len(consume) > 0:
-                self.redis_logger.debug(f"Lock Extender: Event Received from producer: {consume}")
+                self.redis_logger.debug("Lock Extender: Event Received from producer: {consume}"
+                                        .format(consume=consume))
                 key, messages = consume[0]
                 last_id, event_data = messages[0]
                 data = event_data["result"]
@@ -184,6 +195,9 @@ class _BaseLockRelaseManager(object):
                 # If data is "end", lock extender will be closed
                 if data == "end":
                     self.redis_logger.info("Lock Extender will be closed.")
+                    _ = await self.aioharedis_client.client_conn.xdel(lock_extend_stream_key, last_id)
+                    self.redis_logger.debug("Lock Extender event deleted: {last_id}"
+                                            .format(last_id=last_id))
                     await lock.extend(
                         additional_time=lock_time_extender_add_time,
                         replace_ttl=lock_time_extender_replace_ttl
@@ -192,9 +206,11 @@ class _BaseLockRelaseManager(object):
                 
             # Extend lock expire time
             if lock_time_extender_replace_ttl:
-                self.redis_logger.info(f"Lock expire time will be extended w/ttl: {lock_time_extender_add_time} seconds")
+                self.redis_logger.info("Lock expire time will be extended w/ttl: {lock_time_extender_add_time} seconds"
+                                       .format(lock_time_extender_add_time=lock_time_extender_add_time))
             else:
-                self.redis_logger.info(f"Lock expire time will be extended w/expire: {lock_time_extender_add_time} seconds")
+                self.redis_logger.info("Lock expire time will be extended w/expire: {lock_time_extender_add_time} seconds"
+                                       .format(lock_time_extender_add_time=lock_time_extender_add_time))
                 
             _ = await lock.extend(
                 additional_time=lock_time_extender_add_time,
@@ -231,8 +247,11 @@ class _BaseLockRelaseManager(object):
         """
         
         result = await func(*args, **kwargs)
+        
+        stream_key = "stream:{lock_key}.{lock_time_extender_suffix}".format(lock_key=lock_key, lock_time_extender_suffix=lock_time_extender_suffix)
+        end_data = {"result": "end"}
                             
-        await aioharedis_client.client_conn.xadd(f"stream:{lock_key}.{lock_time_extender_suffix}", {"result": "end"}, maxlen=1)
+        await aioharedis_client.client_conn.xadd(stream_key, end_data, maxlen=1)
         redis_logger.info("Lock extender closer event sent from the main function.")
             
         return result
@@ -262,8 +281,11 @@ class _BaseLockRelaseManager(object):
         """
         
         result = func(*args, **kwargs)
+        
+        stream_key = "stream:{lock_key}.{lock_time_extender_suffix}".format(lock_key=lock_key, lock_time_extender_suffix=lock_time_extender_suffix)
+        end_data = {"result": "end"}
                           
-        haredis_client.client_conn.xadd(f"stream:{lock_key}.{lock_time_extender_suffix}", {"result": "end"}, maxlen=1)
+        haredis_client.client_conn.xadd(stream_key, end_data, maxlen=1)
         redis_logger.info("Lock extender closer event sent from the main function.")
             
         return result
@@ -332,7 +354,11 @@ class _BaseLockRelaseManager(object):
         streams: dict,
         consumer_blocking_time: int,
         null_handler: Any,
-        consumer_stream_key: str
+        consumer_stream_key: str,
+        consumer_do_retry: bool,
+        consumer_retry_count: int,
+        consumer_retry_blocking_time_ms: int,
+        consumer_max_re_retry: int
         ):
         """Call consumer when lock is not owned by current process and if already acquired by another process
 
@@ -342,6 +368,10 @@ class _BaseLockRelaseManager(object):
             consumer_blocking_time (int): Blocking time in milliseconds for consumers.
             null_handler (Any): Null handler for empty result (it can be {}, [] or null).
             consumer_stream_key (str): Name of the stream key.
+            consumer_do_retry (bool): If True, consumer will be retried, if lock released.
+            consumer_retry_count (int): Retry count for consumer.
+            consumer_retry_blocking_time_ms (int): Blocking time in milliseconds for consumer retry.
+            consumer_max_re_retry (int): Max re-retry count for consumer.
 
         Returns:
             Any: Result of the function
@@ -353,8 +383,16 @@ class _BaseLockRelaseManager(object):
         if consumer_blocking_time < 0:
             raise ValueError("consumer_blocking_time must be greater than 0.")
                 
-        self.redis_logger.warning(f"Lock key: {lock_key} acquire failed. Result will be tried to retrieve from consumer")
-        result = await self.aioharedis_client.consume_event_xread(streams=streams, lock_key=lock_key, blocking_time_ms=consumer_blocking_time)
+        self.redis_logger.warning("Lock key: {lock_key} acquire failed. Result will be tried to retrieve from consumer".format(lock_key=lock_key))
+        result = await self.aioharedis_client.consume_event_xread(
+            streams=streams,
+            lock_key=lock_key,
+            blocking_time_ms=consumer_blocking_time,
+            do_retry=consumer_do_retry,
+            retry_count=consumer_retry_count,
+            retry_blocking_time_ms=consumer_retry_blocking_time_ms,
+            max_re_retry=consumer_max_re_retry
+            )
                 
         if "from-event" in result.keys():
             
@@ -364,7 +402,7 @@ class _BaseLockRelaseManager(object):
             last_id, event_data = messages[0]
             data = event_data["result"]
             event_info = await self.aioharedis_client.client_conn.xinfo_stream(consumer_stream_key)
-            self.redis_logger.info(f"Event Received from producer: {event_info}")
+            self.redis_logger.info("Event Received from producer: {event_info}".format(event_info=event_info))
             
             if isinstance(data, str) and data == "null":
                 # Return null_handler
@@ -415,8 +453,8 @@ class _BaseLockRelaseManager(object):
                 
         keys_to_lock_args = [item for item in keys_to_lock if item in args]
         keys_to_lock_kwargs = [item for item in keys_to_lock if item in list(kwargs.keys())]
-        self.redis_logger.debug(f"keys_to_lock_args: {keys_to_lock_args}")
-        self.redis_logger.debug(f"keys_to_lock_kwargs: {keys_to_lock_kwargs}")
+        self.redis_logger.debug("keys_to_lock_args: {keys_to_lock_args}".format(keys_to_lock_args=keys_to_lock_args))
+        self.redis_logger.debug("keys_to_lock_kwargs: {keys_to_lock_kwargs}".format(keys_to_lock_kwargs=keys_to_lock_kwargs))
         
         # Add positional arguments to lock key
         if len(keys_to_lock_args) > 0:
@@ -425,7 +463,8 @@ class _BaseLockRelaseManager(object):
                     param = "null"
                 else:
                     param = str(args.get(lock_name))
-                lock_key = f"arg{idx+1}:{param}"
+                fmt_str = str(idx+1) + ":" + param
+                lock_key = "arg" +  fmt_str
                 lock_list.append(lock_key)
         
         # Add keyword arguments to lock key
@@ -435,7 +474,8 @@ class _BaseLockRelaseManager(object):
                     param = "null"
                 else:
                     param = str(kwargs.get(lock_name))
-                lock_key = f"param{idx+1}:{param}"
+                fmt_str = str(idx+1) + ":" + param
+                lock_key = "param" + fmt_str
                 lock_list.append(lock_key)
                 
         # If no positional or keyword arguments are provided, raise ValueError
@@ -443,7 +483,7 @@ class _BaseLockRelaseManager(object):
             raise ValueError("No lock key parameter is provided.")
         
         if lock_key_prefix:
-            lock_key_suffix = f".{lock_key_prefix}{lock_key_suffix}"
+            lock_key_suffix = ".{lock_key_prefix}{lock_key_suffix}".format(lock_key_prefix=lock_key_prefix, lock_key_suffix=lock_key_suffix)
         
         lock_key = "&".join(lock_list) + lock_key_suffix
         return lock_key
