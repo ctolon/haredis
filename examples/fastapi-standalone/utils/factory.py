@@ -1,7 +1,6 @@
 import redis
 from redis import asyncio as aioredis
 
-from haredis.client import AioHaredisClient, HaredisClient
 from haredis.halock_manager import HaredisLockRelaseManager
 from haredis.config import set_up_logging
 
@@ -28,7 +27,7 @@ _AIOREDIS = aioredis.Redis(
 )
 
 RL_MANAGER = HaredisLockRelaseManager(
-    haredis_client=HaredisClient(client_conn=_REDIS),
-    aioharedis_client=AioHaredisClient(client_conn=_AIOREDIS),
+    _REDIS,
+    _AIOREDIS,
     redis_logger=set_up_logging(console_log_level="DEBUG", logfile_log_level="DEBUG")
     )

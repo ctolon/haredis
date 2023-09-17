@@ -9,7 +9,7 @@ import inspect
 
 from redis.asyncio.lock import Lock
 
-from ..client import AioHaredisClusterClient
+from .._client import AioHaredisClusterClient
 
 
 class HaredisClusterLockRelaseManager(object):

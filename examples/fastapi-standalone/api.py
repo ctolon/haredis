@@ -4,7 +4,7 @@ import asyncio
 import uvicorn
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
-from haredis.client import HaredisClient, AioHaredisClient
+from haredis._client import HaredisClient, AioHaredisClient
 import redis
 from redis import asyncio as aioredis
 

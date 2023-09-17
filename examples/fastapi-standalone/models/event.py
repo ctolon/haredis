@@ -4,7 +4,7 @@ from fastapi import Request
 import time
 import asyncio
 
-from haredis.client import AioHaredisClient, HaredisClient
+from haredis._client import AioHaredisClient, HaredisClient
 from haredis.halock_manager import HaredisLockRelaseManager
 from haredis.config import set_up_logging
 

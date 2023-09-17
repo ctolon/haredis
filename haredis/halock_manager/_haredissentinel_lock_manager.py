@@ -9,7 +9,7 @@ import inspect
 
 from redis.asyncio.lock import Lock
 
-from ..client import AioHaredisSentinelClient
+from .._client import AioHaredisSentinelClient
 
 
 class HASentinelredlockManager(object):
