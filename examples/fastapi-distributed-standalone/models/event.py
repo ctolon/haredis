@@ -116,6 +116,7 @@ class EventModel(metaclass=Singleton):
         lock_time_extender_blocking_time=5 * 1000,
         lock_time_extender_replace_ttl=True,
         delete_event_wait_time=10,
+        redis_availability_strategy="error"
     )   
     async def async_event_decorated(self, *args, **kwargs):
         """Decorated Async Example Function with lock release."""
@@ -156,6 +157,7 @@ class EventModel(metaclass=Singleton):
         lock_time_extender_blocking_time=5 * 1000,
         lock_time_extender_replace_ttl=True,
         delete_event_wait_time=10,
+        redis_availability_strategy="error"
     )
     def sync_event_decorated(self, *args, **kwargs):
         """Decorated Async Example Function with lock release."""
@@ -204,10 +206,11 @@ class EventModel(metaclass=Singleton):
         lock_time_extender_blocking_time=5 * 1000,
         lock_time_extender_replace_ttl=True,
         delete_event_wait_time=10,
+        redis_availability_strategy="error"
     )
-    async def sync_event_decorated_wrapped(self, *args, **kwargs):
+    def sync_event_decorated_wrapped(self, *args, **kwargs):
         """Decorated Sync Example Wrapper Function with lock release."""
-        return await self.sync_event_without_rl(*args, **kwargs)
+        return self.sync_event_without_rl(*args, **kwargs)
     
     @RL_MANAGER.aio_lock_release_decorator(
         keys_to_lock=("param1", "param2"),
@@ -225,6 +228,7 @@ class EventModel(metaclass=Singleton):
         lock_time_extender_blocking_time=5 * 1000,
         lock_time_extender_replace_ttl=True,
         delete_event_wait_time=10,
+        redis_availability_strategy="error"
     )
     async def async_event_decorated_wrapped(self, *args, **kwargs):
         """Decorated Async Example Wrapper Function with lock release."""
@@ -272,6 +276,7 @@ class EventModel(metaclass=Singleton):
             lock_time_extender_blocking_time=5 * 1000,
             lock_time_extender_replace_ttl=True,
             delete_event_wait_time=10,
+            redis_availability_strategy="error",
             args=("test"),
             **kwargs
         )
@@ -316,6 +321,7 @@ class EventModel(metaclass=Singleton):
             lock_time_extender_blocking_time=5 * 1000,
             lock_time_extender_replace_ttl=True,
             delete_event_wait_time=10,
+            redis_availability_strategy="error",
             args=("test"),
             **kwargs
         )

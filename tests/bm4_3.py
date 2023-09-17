@@ -2,7 +2,7 @@ import asyncio
 from time import perf_counter
 
 import aiohttp
-from .constants import Endpoints, Datas, PORTS, HOST
+from constants import Endpoints, Datas, PORTS, HOST
 
 REQ_COUNT = 500
 

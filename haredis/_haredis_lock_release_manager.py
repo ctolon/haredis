@@ -65,6 +65,7 @@ class HaredisLockRelaseManager(object):
         lock_time_extender_blocking_time=5 * 1000,
         lock_time_extender_replace_ttl=True,
         delete_event_wait_time=10,
+        redis_availability_strategy="error",
         args=tuple(),
         **kwargs
         ):
@@ -87,16 +88,58 @@ class HaredisLockRelaseManager(object):
             lock_time_extender_blocking_time (int): Blocking time in milliseconds for lock time extender. Defaults to 5000.
             lock_time_extender_replace_ttl (bool): Replace ttl of the lock. Defaults to True.
             delete_event_wait_time (int): Wait time for delete event operation. Defaults to 10.
+            redis_availability_strategy (str): Redis availabilty strategy. Defaults to "error". If "error", raise exception
+                if redis is not available, if "continue", continue execution of function without redis if redis is not available.
 
         Returns:
             Any: Result of the function
         """
-        
+                
         result = None
         nullable = [{}, [], "null"]
         exception_string = None
         exception_found = False
         func_name = func.__name__
+        
+        try:
+            loop = get_running_loop()
+        except RuntimeError as err:
+            self.rl_manager.redis_logger.debug("Event Loop Error: {err}".format(err=err))
+            loop = asyncio.get_event_loop()
+                
+        # Check if function is coroutine function, if not, check if haredis_client is provided
+        is_main_coroutine = inspect.iscoroutinefunction(func)
+        if not is_main_coroutine and not self.rl_manager.haredis_client:
+            raise RuntimeError("haredis_client parameter must be provided in class constructor for syncronous execution.")
+        
+        if redis_availability_strategy not in ("error", "continue"):
+            raise Exception("redis_availability_strategy must be one of these: error, continue")
+        
+        self.rl_manager.redis_logger.debug("Redis availabilty strategy: {redis_availability_strategy}"
+                                           .format(redis_availability_strategy=redis_availability_strategy))
+        
+        is_redis_up = await self.rl_manager.aioharedis_client.is_aioredis_available()
+        
+        # Decide what to do if redis is not available
+        if redis_availability_strategy == "error":
+            if not is_redis_up[0]:
+                raise Exception(is_redis_up[1])
+            
+        if redis_availability_strategy == "continue":
+            if not is_redis_up[0]:
+                self.rl_manager.redis_logger.warning(is_redis_up[1])
+                self.rl_manager.redis_logger.warning("Redis Server is not available. Function {func_name} will be executed without Redis."
+                                                     .format(func_name=func_name))
+                
+                partial_main = partial(func, *args, **kwargs)
+                # Check if function is coroutine function, if not, run in executor, if yes, run directly
+                print("IS MAIN COROUTINE :", is_main_coroutine)
+                if is_main_coroutine:
+                    runner = await asyncio.gather(partial_main(), loop=loop, return_exceptions=True)
+                else:
+                    runner = await asyncio.gather(loop.run_in_executor(None, partial_main), return_exceptions=True)
+                result = runner[0]
+                return result
         
         if not isinstance(func, Callable):
             raise TypeError("func must be callable.")
@@ -117,24 +160,13 @@ class HaredisLockRelaseManager(object):
                 lock_time_extender_blocking_time,
                 lock_time_extender_replace_ttl
             )
-                
-        # Check if function is coroutine function, if not, check if haredis_client is provided
-        is_main_coroutine = inspect.iscoroutinefunction(func)
-        if not is_main_coroutine and not self.rl_manager.haredis_client:
-            raise RuntimeError("haredis_client parameter must be provided in class constructor for syncronous execution.")
-        
+                        
         lock_key = await self.rl_manager.lock_key_generator(keys_to_lock, args, kwargs, lock_key_prefix)
                     
         # Define stream key for consumer
         consumer_stream_key = "stream:{lock_key}".format(lock_key=lock_key)
         streams = {consumer_stream_key: "$"}
-        
-        try:
-            loop = get_running_loop()
-        except RuntimeError as err:
-            self.rl_manager.redis_logger.debug("Event Loop Error: {err}".format(err=err))
-            loop = asyncio.get_event_loop()
-                
+                        
         # Acquire lock
         self.rl_manager.redis_logger.debug("Lock key: {lock_key} will be acquired.".format(lock_key=lock_key))
         lock = await self.rl_manager.aioharedis_client.acquire_lock(lock_key, lock_expire_time)
@@ -303,6 +335,7 @@ class HaredisLockRelaseManager(object):
         lock_time_extender_blocking_time=5000,
         lock_time_extender_replace_ttl=True,
         delete_event_wait_time=10,
+        redis_availability_strategy="error"
     ) -> Any:
         """haredis distributed locking algorithm implementation in redis using stream api xread/xadd (For both syncronous/asyncronous execution) as decorator.
 
@@ -322,6 +355,8 @@ class HaredisLockRelaseManager(object):
             lock_time_extender_blocking_time (int): Blocking time in milliseconds for lock time extender. Defaults to 5000.
             lock_time_extender_replace_ttl (bool): Replace ttl of the lock. Defaults to True.
             delete_event_wait_time (int): Wait time for delete event operation. Defaults to 10.
+            redis_availability_strategy (str): Redis availabilty strategy. Defaults to "error". If "error", raise exception
+                if redis is not available, if "continue", continue execution of function without redis if redis is not available.
 
         Returns:
             Any: Result of the function
@@ -346,6 +381,7 @@ class HaredisLockRelaseManager(object):
                     lock_time_extender_blocking_time,
                     lock_time_extender_replace_ttl,
                     delete_event_wait_time,
+                    redis_availability_strategy,
                     args=args,
                     **kwargs
                 )

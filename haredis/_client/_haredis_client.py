@@ -296,3 +296,12 @@ class HaredisClient:
             _ = redis_lock.release()
         else:
             self.redis_logger.warning("Redis Lock does not exists! Possibly it is expired. Increase expire time for Lock.")
+            
+    def is_redis_available(self):
+        try:
+            self.client_conn.ping()
+            print("Successfully connected to redis")
+        except Exception as e:
+            self.redis_logger.error("Redis Connection Error! Error: {e}".format(e=e))
+            return False, e
+        return True, None

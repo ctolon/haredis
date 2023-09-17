@@ -174,7 +174,7 @@ class AioHaredisClient:
                     self.redis_logger.info("Retrying to get redis lock: {i_plus_one}.time".format(i_plus_one=i_plus_one))
                     
                     # Wait for retry_blocking_time_ms seconds
-                    await asyncio.sleep({retry_blocking_time_ms}/1000)
+                    await asyncio.sleep(retry_blocking_time_ms/1000)
                     
                     # Query lock key status again for retry, if lock key is reacquired, break the loop
                     # And go to the beginning of the while loop after incrementing retry_counter
@@ -352,3 +352,13 @@ class AioHaredisClient:
             _ = await redis_lock.release()
         else:
             self.redis_logger.warning("Redis Lock does not exists! Possibly it is expired. Increase expire time for Lock.")
+            
+    async def is_aioredis_available(self):
+        try:
+            await self.client_conn.ping()
+            print("Successfully connected to redis")
+        except Exception as e:
+            message = "AioRedis Connection Error! Error: {e}".format(e=e)
+            self.redis_logger.error(message)
+            return False, message
+        return True, None
