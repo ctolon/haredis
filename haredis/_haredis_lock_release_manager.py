@@ -17,6 +17,7 @@ import redis
 from redis import asyncio as aioredis
 
 from ._base._base_lock_release_manager import _BaseLockRelaseManager
+from ._base._utils import _safe_json
 
 class HaredisLockRelaseManager(object):
     """## Redis Lock Release Manager Class for Distributed Caching/Locking in Redis
@@ -66,6 +67,8 @@ class HaredisLockRelaseManager(object):
         lock_time_extender_replace_ttl=True,
         delete_event_wait_time=10,
         redis_availability_strategy="error",
+        response_cache=None,
+        extend_cache_time=False,
         args=tuple(),
         **kwargs
         ):
@@ -90,23 +93,60 @@ class HaredisLockRelaseManager(object):
             delete_event_wait_time (int): Wait time for delete event operation. Defaults to 10.
             redis_availability_strategy (str): Redis availabilty strategy. Defaults to "error". If "error", raise exception
                 if redis is not available, if "continue", continue execution of function without redis if redis is not available.
+            response_cache (int, optional): If provided, cache response with provided time in seconds. Defaults to None.
+            extend_cache_time (bool, optional): If True, extend cache time with response cache parameter. Defaults to False.
 
         Returns:
             Any: Result of the function
         """
+        
+        # Type Checks
+        if not isinstance(func, Callable):
+            raise TypeError("func must be callable.")
+        
+        if not isinstance(lock_time_extender_suffix, str):
+            raise TypeError("lock_time_extender_suffix must be string.")
+        
+        if not isinstance(extend_cache_time, bool) or extend_cache_time is not None:
+            raise TypeError("extend_cache_time must be boolean or None Type.")
                 
+        if null_handler not in nullable:
+            raise Exception("null_handler must be type of one of these: {nullable}".format(nullable=nullable))
+        
+        if lock_expire_time < 0:
+            raise ValueError("lock_expire_time must be greater than 0.")
+        
+        # Predefine variables
         result = None
         nullable = [{}, [], "null"]
         exception_string = None
         exception_found = False
         func_name = func.__name__
         
+        # Generate lock key and cache key
+        lock_key = await self.rl_manager.lock_key_generator(keys_to_lock, args, kwargs, lock_key_prefix)
+        cache_key = lock_key + ".cache"
+                    
+        # Define stream key for consumer
+        consumer_stream_key = "stream:{lock_key}".format(lock_key=lock_key)
+        streams = {consumer_stream_key: "$"}
+                
+        # Print warning messages if run_with_lock_time_extender is False
+        if not run_with_lock_time_extender:
+            await self.rl_manager.warn_aio_lock_time_extender(
+                lock_time_extender_suffix,
+                lock_time_extender_add_time,
+                lock_time_extender_blocking_time,
+                lock_time_extender_replace_ttl
+            )
+            
+        # Get running event loop if exists, if not, get event loop                     
         try:
             loop = get_running_loop()
         except RuntimeError as err:
             self.rl_manager.redis_logger.debug("Event Loop Error: {err}".format(err=err))
             loop = asyncio.get_event_loop()
-                
+        
         # Check if function is coroutine function, if not, check if haredis_client is provided
         is_main_coroutine = inspect.iscoroutinefunction(func)
         if not is_main_coroutine and not self.rl_manager.haredis_client:
@@ -120,53 +160,42 @@ class HaredisLockRelaseManager(object):
         
         is_redis_up = await self.rl_manager.aioharedis_client.is_aioredis_available()
         
+        redis_status, conn_exception_msg = is_redis_up
+                
         # Decide what to do if redis is not available
         if redis_availability_strategy == "error":
-            if not is_redis_up[0]:
-                raise Exception(is_redis_up[1])
+            if redis_status is False:
+                raise Exception(conn_exception_msg)
             
         if redis_availability_strategy == "continue":
-            if not is_redis_up[0]:
-                self.rl_manager.redis_logger.warning(is_redis_up[1])
+            if redis_status is False:
+                self.rl_manager.redis_logger.warning(conn_exception_msg)
                 self.rl_manager.redis_logger.warning("Redis Server is not available. Function {func_name} will be executed without Redis."
                                                      .format(func_name=func_name))
                 
                 partial_main = partial(func, *args, **kwargs)
+                
                 # Check if function is coroutine function, if not, run in executor, if yes, run directly
-                print("IS MAIN COROUTINE :", is_main_coroutine)
+                self.rl_manager.redis_logger.debug("is_main_coroutine: {is_main_coroutine}.".format(is_main_coroutine=is_main_coroutine))
                 if is_main_coroutine:
                     runner = await asyncio.gather(partial_main(), loop=loop, return_exceptions=True)
                 else:
                     runner = await asyncio.gather(loop.run_in_executor(None, partial_main), return_exceptions=True)
                 result = runner[0]
                 return result
-        
-        if not isinstance(func, Callable):
-            raise TypeError("func must be callable.")
-        
-        if not isinstance(lock_time_extender_suffix, str):
-            raise TypeError("lock_time_extender_suffix must be string.")
-                
-        if null_handler not in nullable:
-            raise Exception("null_handler must be type of one of these: {nullable}".format(nullable=nullable))
-        
-        if lock_expire_time < 0:
-            raise ValueError("lock_expire_time must be greater than 0.")
-        
-        if not run_with_lock_time_extender:
-            await self.rl_manager.warn_aio_lock_time_extender(
-                lock_time_extender_suffix,
-                lock_time_extender_add_time,
-                lock_time_extender_blocking_time,
-                lock_time_extender_replace_ttl
-            )
-                        
-        lock_key = await self.rl_manager.lock_key_generator(keys_to_lock, args, kwargs, lock_key_prefix)
-                    
-        # Define stream key for consumer
-        consumer_stream_key = "stream:{lock_key}".format(lock_key=lock_key)
-        streams = {consumer_stream_key: "$"}
-                        
+           
+        # Get Response from cache if exists, also extend cache time if extend_cache_time is True 
+        if response_cache:
+            self.rl_manager.redis_logger.debug("Response will be get from redis cache if exists.")
+            cache_result = await self.rl_manager.aioharedis_client.client_conn.get(name=cache_key)
+            if cache_result:
+                self.rl_manager.redis_logger.debug("Response found in redis cache.")
+                if extend_cache_time:
+                    self.rl_manager.redis_logger.debug("Cache time will be extended for {response_cache} seconds.".format(response_cache=response_cache))
+                    await self.rl_manager.aioharedis_client.client_conn.expire(name=cache_key, time=response_cache)
+                return cache_result
+            self.rl_manager.redis_logger.debug("Response not found in redis cache.")
+                                                                                   
         # Acquire lock
         self.rl_manager.redis_logger.debug("Lock key: {lock_key} will be acquired.".format(lock_key=lock_key))
         lock = await self.rl_manager.aioharedis_client.acquire_lock(lock_key, lock_expire_time)
@@ -256,6 +285,17 @@ class HaredisLockRelaseManager(object):
                 exception_found = True
                 
             finally:
+                
+                # If response cache, Set data to cache
+                if response_cache:
+                    self.rl_manager.redis_logger.debug("Response will be cached for {response_cache} seconds.".format(response_cache=response_cache))
+                    if isinstance(result, dict):
+                        try:
+                            json.dumps(result)
+                        except Exception as e:
+                            self.rl_manager.redis_logger.error(str(e))
+                    cache_set_status = await self.rl_manager.aioharedis_client.client_conn.set("response_cache", result, ex=response_cache)
+                    self.rl_manager.redis_logger.debug("Set Cache Response status: {cache_set_status}".format(cache_set_status=cache_set_status))
                                 
                 if exception_string:
                     self.rl_manager.redis_logger.warning("Exception found {exception_string}".format(exception_string=exception_string))
