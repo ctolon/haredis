@@ -8,8 +8,7 @@ import sys
 from os.path import join
 import platform
 
-from setuptools import Command, setup
-
+from setuptools import Command, setup, find_packages
 DISTNAME = "haredis"
 DESCRIPTION = "Python Module which wraps Redis ...."
 with open("README.md") as f:
@@ -20,8 +19,8 @@ MAINTAINER_EMAIL = "cevat.batuhan.tolon@cern.ch"
 DOWNLOAD_URL = "https://pypi.org/project/haredis/#files"
 LICENSE = "Apache 2.0"
 PROJECT_URLS = {
-    "Bug Tracker": "https://github.com/haredis/haredis/issues",
-    "Documentation": "https://www.haredis.com",
+    "Bug Tracker": "https://github.com/ctolon/haredis/issues",
+    # "Documentation": "https://www.haredis.com",
     "Source Code": "https://github.com/ctolon/haredis",
 }
 VERSION = "0.0.1"
@@ -90,12 +89,12 @@ def setup_package():
         download_url=DOWNLOAD_URL,
         project_urls=PROJECT_URLS,
         version=VERSION,
-        package_dir={"haredis": "haredis"},
+        # package_dir={"haredis": "haredis"},
         keywords=["redis", "aioredis", "lock-relase", "high availability", "distributed systems", "streaming api"],
-        # packages=find_packages(),
+        packages=find_packages(),
         classifiers=[
             "Intended Audience :: Developers",
-            'Natural Language :: English'
+            "Natural Language :: English",
             "License :: OSI Approved :: Apache Software License",
             "Programming Language :: Python",
             "Topic :: Software Development",
@@ -139,10 +138,7 @@ def setup_package():
     setup(**metadata)
 
 if __name__ == "__main__":
-    
-    # if sys.version_info < (3,6):
-    #     sys.exit('Sorry, Python < 2.7 is not supported')
-    
+        
     setup_package()
 
 

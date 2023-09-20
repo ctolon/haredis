@@ -514,6 +514,7 @@ class _BaseLockRelaseManager(object):
         cache_result = await self.aioharedis_client.client_conn.get(name=cache_key)
         if cache_result:
             self.redis_logger.debug("Result found in redis cache.")
+            cache_result = json.loads(cache_result)
             if extend_cache_time:
                 self.redis_logger.debug("Cache time will be extended for {response_cache} seconds.".format(response_cache=response_cache))
                 await self.aioharedis_client.client_conn.expire(name=cache_key, time=response_cache)

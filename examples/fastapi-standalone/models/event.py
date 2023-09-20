@@ -332,8 +332,8 @@ class EventModel(metaclass=Singleton):
             lock_time_extender_replace_ttl=True,
             delete_event_wait_time=10,
             redis_availability_strategy="error",
-            response_cache=None,
-            extend_cache_time=False,
+            response_cache=100,
+            extend_cache_time=True,
             args=("test"),
             **kwargs
         )

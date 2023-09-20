@@ -17,7 +17,6 @@ import redis
 from redis import asyncio as aioredis
 
 from ._base._base_lock_release_manager import _BaseLockRelaseManager
-from ._base._utils import _safe_json
 
 class HaredisLockRelaseManager(object):
     """## Redis Lock Release Manager Class for Distributed Caching/Locking in Redis
@@ -275,11 +274,7 @@ class HaredisLockRelaseManager(object):
                 exception_found = True
                 
             finally:
-                
-                # Set result to cache if response_cache is provided
-                if response_cache:
-                    await self.rl_manager.set_result_to_cache(cache_key, response_cache, result)
-                                         
+                                                         
                 if exception_string:
                     self.rl_manager.redis_logger.warning("Exception found {exception_string}".format(exception_string=exception_string))
 
@@ -314,7 +309,10 @@ class HaredisLockRelaseManager(object):
                     return null_handler
                 
                 # If everything is ok, serialize data, release lock and finally produce event to consumers
-                event_data = {"result": json.dumps(result)}
+                serialized_result = json.dumps(result)
+                event_data = {"result": serialized_result}
+                if response_cache:
+                    await self.rl_manager.set_result_to_cache(cache_key, response_cache, serialized_result)
                 await self.rl_manager.aioharedis_client.release_lock(lock)
                 self.rl_manager.redis_logger.info("Lock key: {lock_key} released.".format(lock_key=lock_key))
                 _ = await self.rl_manager.aioharedis_client.produce_event_xadd(stream_name=consumer_stream_key, data=event_data, maxlen=1)
@@ -392,25 +390,25 @@ class HaredisLockRelaseManager(object):
             @functools.wraps(func)
             async def async_wrapper(*args, **kwargs):
                 result = await self.aio_lock_release_with_stream(
-                    func,
-                    keys_to_lock,
-                    lock_key_prefix,
-                    lock_expire_time,
-                    consumer_blocking_time,
-                    consumer_do_retry,
-                    consumer_retry_count,
-                    consumer_retry_blocking_time_ms,
-                    consumer_max_re_retry,
-                    null_handler,
-                    run_with_lock_time_extender,
-                    lock_time_extender_suffix,
-                    lock_time_extender_add_time,
-                    lock_time_extender_blocking_time,
-                    lock_time_extender_replace_ttl,
-                    delete_event_wait_time,
-                    redis_availability_strategy,
-                    response_cache,
-                    extend_cache_time,
+                    func=func,
+                    keys_to_lock=keys_to_lock,
+                    lock_key_prefix=lock_key_prefix,
+                    lock_expire_time=lock_expire_time,
+                    consumer_blocking_time=consumer_blocking_time,
+                    consumer_do_retry=consumer_do_retry,
+                    consumer_retry_count=consumer_retry_count,
+                    consumer_retry_blocking_time_ms=consumer_retry_blocking_time_ms,
+                    consumer_max_re_retry=consumer_max_re_retry,
+                    null_handler=null_handler,
+                    run_with_lock_time_extender=run_with_lock_time_extender,
+                    lock_time_extender_suffix=lock_time_extender_suffix,
+                    lock_time_extender_add_time=lock_time_extender_add_time,
+                    lock_time_extender_blocking_time=lock_time_extender_blocking_time,
+                    lock_time_extender_replace_ttl=lock_time_extender_replace_ttl,
+                    delete_event_wait_time=delete_event_wait_time,
+                    redis_availability_strategy=redis_availability_strategy,
+                    response_cache=response_cache,
+                    extend_cache_time=extend_cache_time,
                     args=args,
                     **kwargs
                 )
