@@ -23,7 +23,7 @@ PROJECT_URLS = {
     # "Documentation": "https://www.haredis.com",
     "Source Code": "https://github.com/ctolon/haredis",
 }
-VERSION = "0.0.1"
+VERSION = "0.0.0.1"
 
 
 # Custom clean command to remove build artifacts
