@@ -106,10 +106,7 @@ class HaredisLockRelaseManager(object):
         
         if not isinstance(lock_time_extender_suffix, str):
             raise TypeError("lock_time_extender_suffix must be string.")
-        
-        if not isinstance(extend_cache_time, bool) or extend_cache_time is not None:
-            raise TypeError("extend_cache_time must be boolean or None Type.")
-                
+                        
         if null_handler not in nullable:
             raise Exception("null_handler must be type of one of these: {nullable}".format(nullable=nullable))
         
@@ -186,16 +183,10 @@ class HaredisLockRelaseManager(object):
            
         # Get Response from cache if exists, also extend cache time if extend_cache_time is True 
         if response_cache:
-            self.rl_manager.redis_logger.debug("Response will be get from redis cache if exists.")
-            cache_result = await self.rl_manager.aioharedis_client.client_conn.get(name=cache_key)
-            if cache_result:
-                self.rl_manager.redis_logger.debug("Response found in redis cache.")
-                if extend_cache_time:
-                    self.rl_manager.redis_logger.debug("Cache time will be extended for {response_cache} seconds.".format(response_cache=response_cache))
-                    await self.rl_manager.aioharedis_client.client_conn.expire(name=cache_key, time=response_cache)
-                return cache_result
-            self.rl_manager.redis_logger.debug("Response not found in redis cache.")
-                                                                                   
+            result = await self.rl_manager.get_result_from_cache(response_cache, extend_cache_time, cache_key)
+            if result:
+                return result
+                                       
         # Acquire lock
         self.rl_manager.redis_logger.debug("Lock key: {lock_key} will be acquired.".format(lock_key=lock_key))
         lock = await self.rl_manager.aioharedis_client.acquire_lock(lock_key, lock_expire_time)
@@ -204,7 +195,6 @@ class HaredisLockRelaseManager(object):
         
         self.rl_manager.redis_logger.debug("Lock key: {lock_key} is locked: {is_locked}, is owned: {is_owned}"
                                            .format(lock_key=lock_key, is_locked=is_locked, is_owned=is_owned))
-                
         # If lock is not owned by current process, call consumer otherwise call producer         
         if is_owned:
             try:
@@ -286,17 +276,10 @@ class HaredisLockRelaseManager(object):
                 
             finally:
                 
-                # If response cache, Set data to cache
+                # Set result to cache if response_cache is provided
                 if response_cache:
-                    self.rl_manager.redis_logger.debug("Response will be cached for {response_cache} seconds.".format(response_cache=response_cache))
-                    if isinstance(result, dict):
-                        try:
-                            json.dumps(result)
-                        except Exception as e:
-                            self.rl_manager.redis_logger.error(str(e))
-                    cache_set_status = await self.rl_manager.aioharedis_client.client_conn.set("response_cache", result, ex=response_cache)
-                    self.rl_manager.redis_logger.debug("Set Cache Response status: {cache_set_status}".format(cache_set_status=cache_set_status))
-                                
+                    await self.rl_manager.set_result_to_cache(response_cache, cache_key, result)
+                                         
                 if exception_string:
                     self.rl_manager.redis_logger.warning("Exception found {exception_string}".format(exception_string=exception_string))
 

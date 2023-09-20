@@ -487,3 +487,64 @@ class _BaseLockRelaseManager(object):
         
         lock_key = "&".join(lock_list) + lock_key_suffix
         return lock_key
+    
+    async def get_result_from_cache(self, response_cache: int, cache_key: str, extend_cache_time: bool = None):
+        """_summary_
+
+        Args:
+            response_cache (int): Response cache time in seconds 
+            cache_key (str): Cache key
+            extend_cache_time (bool): If True, cache time will be extended for response_cache seconds. Defaults to None.
+
+        Raises:
+            TypeError: If response_cache is not integer, raise
+            TypeError: If extend_cache_time is not boolean or None Type, raise
+
+        Returns:
+            Any: Result from cacahe
+        """
+        
+        if not isinstance(response_cache, int):
+            raise TypeError("response_cache must be integer.")
+        
+        if not isinstance(extend_cache_time, bool) or extend_cache_time is not None:
+            raise TypeError("extend_cache_time must be boolean or None Type.")
+        
+        self.redis_logger.debug("Result will be get from redis cache if exists.")
+        cache_result = await self.aioharedis_client.client_conn.get(name=cache_key)
+        if cache_result:
+            self.redis_logger.debug("Result found in redis cache.")
+            if extend_cache_time:
+                self.redis_logger.debug("Cache time will be extended for {response_cache} seconds.".format(response_cache=response_cache))
+                await self.aioharedis_client.client_conn.expire(name=cache_key, time=response_cache)
+            return cache_result
+        self.redis_logger.debug("Result not found in redis cache.")
+        
+    async def set_result_to_cache(self, response_cache: int, result: Any):
+        """Set result to redis cache
+
+        Args:
+            response_cache (int): Response cache time in seconds
+            result (Any): Result to be cached
+
+        Raises:
+            TypeError: If response_cache is not integer, raise TypeError
+        """
+        
+        if not isinstance(response_cache, int):
+            raise TypeError("response_cache must be integer.")
+
+        if response_cache:
+            self.redis_logger.debug("Response will be cached for {response_cache} seconds.".format(response_cache=response_cache))
+            
+            # If result is dict, try to convert it to json
+             # if isinstance(result, dict):
+             #     try:
+             #         result = json.dumps(result)
+             #     except Exception as e:
+             #         pass
+                
+                
+            cache_set_status = await self.aioharedis_client.client_conn.set("response_cache", result, ex=response_cache)
+            self.redis_logger.debug("Set Cache Response status: {cache_set_status}".format(cache_set_status=cache_set_status))
+        
