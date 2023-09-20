@@ -26,18 +26,6 @@ PROJECT_URLS = {
 }
 VERSION = "0.0.1"
 
-class InvalidVersion(ValueError):
-    """
-    An invalid version was found, users should refer to PEP 440.
-    """
-
-def parse(version: str):
-    """Parse the given version from a string to an appropriate class."""
-
-    try:
-        version.split(".")
-    except InvalidVersion:
-        return InvalidVersion("Version is invalid: {version}".format(version=version))
 
 # Custom clean command to remove build artifacts
 class CleanCommand(Command):
@@ -85,8 +73,9 @@ cmdclass = {
 
             
 def setup_package():
-    python_requires = ">=3.6"
-    required_python_version = (3, 6)
+    
+    # python_requires = ">=3.6"
+    # required_python_version = (3, 6)
 
     metadata = dict(
         name=DISTNAME,
@@ -128,28 +117,32 @@ def setup_package():
             'Framework :: AsyncIO'
         ],
         cmdclass=cmdclass,
-        python_requires=python_requires,
+        # python_requires=python_requires,
         install_requires=['redis>=4'],
         package_data={"": ["*.csv", "*.gz", "*.txt", "*.pxd", "*.md", "*.jpg"]},
         zip_safe=False,  # the package can run out of an .egg file
         # extras_require={"with_celery": ["celery"]}
     )
     
-    commands = [arg for arg in sys.argv[1:] if not arg.startswith("-")]
-    if not all(
-        command in ("egg_info", "dist_info", "clean", "check") for command in commands
-    ):
-        if sys.version_info < required_python_version:
-            required_version = "%d.%d" % required_python_version
-            raise RuntimeError(
-                "haredis requires Python %s or later. The current"
-                " Python version is %s installed in %s."
-                % (required_version, platform.python_version(), sys.executable)
-            )
+    # commands = [arg for arg in sys.argv[1:] if not arg.startswith("-")]
+    # if not all(
+    #     command in ("egg_info", "dist_info", "clean", "check") for command in commands
+    # ):
+    #     if sys.version_info < required_python_version:
+    #         required_version = "%d.%d" % required_python_version
+    #         raise RuntimeError(
+    #             "haredis requires Python %s or later. The current"
+    #             " Python version is %s installed in %s."
+    #             % (required_version, platform.python_version(), sys.executable)
+    #         )
             
     setup(**metadata)
 
 if __name__ == "__main__":
+    
+    # if sys.version_info < (3,6):
+    #     sys.exit('Sorry, Python < 2.7 is not supported')
+    
     setup_package()
 
 
