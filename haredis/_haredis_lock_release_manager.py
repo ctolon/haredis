@@ -183,7 +183,7 @@ class HaredisLockRelaseManager(object):
            
         # Get Response from cache if exists, also extend cache time if extend_cache_time is True 
         if response_cache:
-            result = await self.rl_manager.get_result_from_cache(response_cache, extend_cache_time, cache_key)
+            result = await self.rl_manager.get_result_from_cache(response_cache, cache_key, extend_cache_time)
             if result:
                 return result
                                        
@@ -278,7 +278,7 @@ class HaredisLockRelaseManager(object):
                 
                 # Set result to cache if response_cache is provided
                 if response_cache:
-                    await self.rl_manager.set_result_to_cache(response_cache, cache_key, result)
+                    await self.rl_manager.set_result_to_cache(cache_key, response_cache, result)
                                          
                 if exception_string:
                     self.rl_manager.redis_logger.warning("Exception found {exception_string}".format(exception_string=exception_string))

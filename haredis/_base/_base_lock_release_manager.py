@@ -507,8 +507,8 @@ class _BaseLockRelaseManager(object):
         if not isinstance(response_cache, int):
             raise TypeError("response_cache must be integer.")
         
-        if not isinstance(extend_cache_time, bool) or extend_cache_time is not None:
-            raise TypeError("extend_cache_time must be boolean or None Type.")
+        # if not isinstance(extend_cache_time, bool) or extend_cache_time is not None:
+        #     raise TypeError("extend_cache_time must be boolean or None Type.")
         
         self.redis_logger.debug("Result will be get from redis cache if exists.")
         cache_result = await self.aioharedis_client.client_conn.get(name=cache_key)
@@ -520,10 +520,11 @@ class _BaseLockRelaseManager(object):
             return cache_result
         self.redis_logger.debug("Result not found in redis cache.")
         
-    async def set_result_to_cache(self, response_cache: int, result: Any):
+    async def set_result_to_cache(self, cache_key: str, response_cache: int, result: Any):
         """Set result to redis cache
 
         Args:
+            cache_key (str): Cache key
             response_cache (int): Response cache time in seconds
             result (Any): Result to be cached
 
@@ -545,6 +546,6 @@ class _BaseLockRelaseManager(object):
              #         pass
                 
                 
-            cache_set_status = await self.aioharedis_client.client_conn.set("response_cache", result, ex=response_cache)
+            cache_set_status = await self.aioharedis_client.client_conn.set(cache_key, result, ex=response_cache)
             self.redis_logger.debug("Set Cache Response status: {cache_set_status}".format(cache_set_status=cache_set_status))
         
