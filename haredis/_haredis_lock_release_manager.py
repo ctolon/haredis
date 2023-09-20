@@ -100,6 +100,13 @@ class HaredisLockRelaseManager(object):
             Any: Result of the function
         """
         
+        # Predefined variables
+        result = None
+        exception_string = None
+        exception_found = False
+        func_name = func.__name__
+        nullable = [{}, [], "null"]
+        
         # Type Checks
         if not isinstance(func, Callable):
             raise TypeError("func must be callable.")
@@ -112,13 +119,6 @@ class HaredisLockRelaseManager(object):
         
         if lock_expire_time < 0:
             raise ValueError("lock_expire_time must be greater than 0.")
-        
-        # Predefine variables
-        result = None
-        nullable = [{}, [], "null"]
-        exception_string = None
-        exception_found = False
-        func_name = func.__name__
         
         # Generate lock key and cache key
         lock_key = await self.rl_manager.lock_key_generator(keys_to_lock, args, kwargs, lock_key_prefix)

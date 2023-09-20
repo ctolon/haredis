@@ -383,7 +383,7 @@ class _BaseLockRelaseManager(object):
         if consumer_blocking_time < 0:
             raise ValueError("consumer_blocking_time must be greater than 0.")
                 
-        self.redis_logger.warning("Lock key: {lock_key} acquire failed. Result will be tried to retrieve from consumer".format(lock_key=lock_key))
+        self.redis_logger.debug("Lock key: {lock_key} acquire failed. Result will be tried to retrieve from consumer".format(lock_key=lock_key))
         result = await self.aioharedis_client.consume_event_xread(
             streams=streams,
             lock_key=lock_key,
