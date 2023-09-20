@@ -358,7 +358,9 @@ class HaredisLockRelaseManager(object):
         lock_time_extender_blocking_time=5000,
         lock_time_extender_replace_ttl=True,
         delete_event_wait_time=10,
-        redis_availability_strategy="error"
+        redis_availability_strategy="error",
+        response_cache=None,
+        extend_cache_time=False
     ) -> Any:
         """haredis distributed locking algorithm implementation in redis using stream api xread/xadd (For both syncronous/asyncronous execution) as decorator.
 
@@ -380,6 +382,8 @@ class HaredisLockRelaseManager(object):
             delete_event_wait_time (int): Wait time for delete event operation. Defaults to 10.
             redis_availability_strategy (str): Redis availabilty strategy. Defaults to "error". If "error", raise exception
                 if redis is not available, if "continue", continue execution of function without redis if redis is not available.
+            response_cache (int, optional): If provided, cache response with provided time in seconds. Defaults to None.
+            extend_cache_time (bool, optional): If True, extend cache time with response cache parameter. Defaults to False.
 
         Returns:
             Any: Result of the function
@@ -405,6 +409,8 @@ class HaredisLockRelaseManager(object):
                     lock_time_extender_replace_ttl,
                     delete_event_wait_time,
                     redis_availability_strategy,
+                    response_cache,
+                    extend_cache_time,
                     args=args,
                     **kwargs
                 )
