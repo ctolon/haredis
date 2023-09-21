@@ -1,52 +1,3 @@
-# haredis: Python Extension for redis with Abstractions
-
-`haredis` is a Python module integrating redis/aioredis
-lock-release algorithms with a simple way in High Availability.
-
-It aims to provide simple and efficient solutions to lock-release problems
-with streaming API.
-
-`NOTE:` This project is under development. It isn't full ready for production use.
-
-* `Author`: Cevat Batuhan Tolon
-* `Contact`: cevat.batuhan.tolon@cern.ch
-
-## Requirements
-
-* Python 3.6+
-* redis>=4
-
-## Installation
-
-```bash
-pip install haredis
-```
-
-### Basic Usage With FastAPI
-
-This example shows how to use haredis with Redis Standalone setup w/FastAPI.
-
-* First, you need to create a Redis Standalone instance. You can use Docker for this purpose.
-
-```bash
-docker run -it -d --name redis-standalone -p 6379:6379 redis redis-server --appendonly yes --requirepass examplepass
-```
-
-* Then, Install haredis:
-
-```bash
-pip install haredis
-```
-
-* Then, For Using FastAPI, you need install FastAPI dependencies.
-
-```bash
-pip install fastapi[all]
-```
-
-* Then create a file named `main.py` and copy the following code into it:
-
-```python
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
@@ -56,7 +7,8 @@ from haredis import HaredisLockRelaseManager, set_up_logging
 import redis
 from redis import asyncio as aioredis
 
-# Define Redis Connection Objects for both async and sync operations
+
+# Define Redis Connection Objects
 _REDIS = redis.Redis(
     host="0.0.0.0",
     port=6379,
@@ -377,57 +329,4 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=8000,
     )
-```
 
-* Run the application:
-
-```bash
-python main.py
-```
-
-* Test the application:
-
-```bash
-curl -X 'GET' \
-  'http://0.0.0.0:8000/sync_decorated_style?param1=23&param2=23' \
-  -H 'accept: application/json'
-```
-
-You can send multiple requests at the same time and see that the lock is working.
-
-### More Examples
-
-More examples can be found in the `examples` folder.
-
-## Usage Parameters
-
-Usage parameters for `aio_lock_release_with_stream` function:
-
-```python
-"""
-func (Callable): Function name to be executed.
-keys_to_lock (tuple): Keys to be locked.
-lock_key_prefix (str, optional): Prefix for lock key. Defaults to None.
-lock_expire_time (int): Expiry time of the lock. Defaults to 30.
-consumer_blocking_time (int): Blocking time in milliseconds for consumers. Defaults to 5000.
-consumer_do_retry (bool): If True, consumer will be retried, if lock released. Defaults to True.
-consumer_retry_count (int): Retry count for consumer. Defaults to 5.
-consumer_retry_blocking_time_ms (int): Blocking time in milliseconds for consumer retry. Defaults to 2000.
-consumer_max_re_retry (int): Max re-retry count for consumer. Defaults to 2.
-null_handler (Any): Null handler for empty result (it can be {}, [] or null). Defaults to "null".
-run_with_lock_time_extender (bool): If True, lock time extender will be executed for High Availability. Defaults to True.
-lock_time_extender_suffix (str, optional): Suffix for lock extender stream key. Defaults to "lock_extender".
-lock_time_extender_add_time (int): Additional time for lock time extender to be executed. Defaults to 10.
-lock_time_extender_blocking_time (int): Blocking time in milliseconds for lock time extender. Defaults to 5000.
-lock_time_extender_replace_ttl (bool): Replace ttl of the lock. Defaults to True.
-delete_event_wait_time (int): Wait time for delete event operation. Defaults to 10.
-redis_availability_strategy (str): Redis availabilty strategy. Defaults to "error". If "error", raise exception
-    if redis is not available, if "continue", continue execution of function without redis if redis is not available.
-response_cache (int, optional): If provided, cache response with provided time in seconds. Defaults to None.
-extend_cache_time (bool, optional): If True, extend cache time with response cache parameter. Defaults to False.
-args (tuple, optional): Arguments for function. Defaults to ().
-**kwargs (dict, optional): Keyword arguments for function. Defaults to {}.
-"""
-```
-
-For `aio_lock_release_decorator`, you don't need specify `func`, `args` and `**kwargs` parameter. It will be automatically set.
