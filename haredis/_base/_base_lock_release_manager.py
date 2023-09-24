@@ -549,4 +549,302 @@ class _BaseLockRelaseManager(object):
                 
             cache_set_status = await self.aioharedis_client.client_conn.set(cache_key, result, ex=response_cache)
             self.redis_logger.debug("Set Cache Response status: {cache_set_status}".format(cache_set_status=cache_set_status))
+            
+    # PUB-SUB Implementation
+    
+    async def aio_lock_time_extender_pubsub(
+        self,
+        lock: Lock,
+        pubsub_channel: str,
+        lock_time_extender_suffix: str,
+        lock_time_extender_add_time=10,
+        lock_time_extender_blocking_time=5000,
+        lock_time_extender_replace_ttl: bool = True
+        ):
+        """Asyncronous lock time extender for lock release manager w/pubsub
+        
+        Args:
+            lock (Lock): Lock object
+            pubsub_channel (str): Name of the pub/sub channel
+            lock_time_extender_suffix (str): Suffix for lock extender stream key
+            lock_time_extender_add_time (int): Additional time for lock time extender to be executed in seconds. Defaults to 10.
+            lock_time_extender_blocking_time (int): Blocking time in milliseconds for lock time extender. Defaults to 5.
+            lock_time_extender_replace_ttl (bool): Replace ttl of the lock. Defaults to True. If False, expire will be used instead of ttl.
+        
+        """
+        
+        # Type check if run with lock time extender is True
+        if not (isinstance(lock_time_extender_add_time, int) or isinstance(lock_time_extender_add_time, float)):
+            type_lock_time_extender_add_time = type(lock_time_extender_add_time)
+            raise TypeError("lock_time_extender_add_time must be integer or float. Found: {type_lock_time_extender_add_time}"
+                            .format(type_lock_time_extender_add_time=type_lock_time_extender_add_time))
+        
+        if not isinstance(lock_time_extender_blocking_time, int):
+            type_lock_time_extender_blocking_time = type(lock_time_extender_blocking_time)
+            raise TypeError("lock_time_extender_blocking_time must be integer. Found: {type_lock_time_extender_blocking_time}"
+                            .format(type_lock_time_extender_blocking_time=type_lock_time_extender_blocking_time))
+        
+        if not isinstance(lock_time_extender_replace_ttl, bool):
+            type_lock_time_extender_replace_ttl = type(lock_time_extender_replace_ttl)
+            raise TypeError("lock_time_extender_replace_ttl must be boolean. Found: {type_lock_time_extender_replace_ttl}"
+                            .format(type_lock_time_extender_replace_ttl=type_lock_time_extender_replace_ttl))
+    
+        if lock_time_extender_add_time < 1:
+            raise ValueError("lock_time_extender_add_time must be greater than 1. Found: {lock_time_extender_add_time}"
+                             .format(lock_time_extender_add_time=lock_time_extender_add_time))
+        
+        if lock_time_extender_blocking_time < 1:
+            raise ValueError("lock_time_extender_blocking_time must be greater than 1.")
+        
+        if lock_time_extender_blocking_time > lock_time_extender_add_time * 1000:
+            raise ValueError("lock_time_extender_blocking_time must be less than lock_time_extender_add_time.")
+
+        consume = None
+ 
+        lock_extend_pubsub_key = "{pubsub_channel}.{lock_time_extender_suffix}".format(
+            pubsub_channel=pubsub_channel,
+            lock_time_extender_suffix=lock_time_extender_suffix
+            )
+
+        is_locked = await lock.locked()
+        
+                
+        # While lock is acquired, call lock time extender consumer
+        while is_locked:
+            
+            # Subscribe to Channel        
+            ps = self.aioharedis_client.client_conn.pubsub()
+            await ps.subscribe(lock_extend_pubsub_key)
+            
+            # Listen to Channel
+            async for raw_message in ps.listen():
+                if raw_message['type'] == 'message':
+                    consume = raw_message['data']
+                    try:
+                        consume = json.loads(consume)
+                        break
+                    except Exception as e:
+                        self.redis_logger.error("Data is not JSON Encodable!")
+                        raise TypeError("Data is not JSON Encodable!") 
+                        
+            # Retrieve data from event
+            if len(consume) > 0:
+                self.redis_logger.debug("Lock Extender: Event Received from producer: {consume}"
+                                        .format(consume=consume))
+                
+                data = consume["result"]
+                
+                # If data is "end", lock extender will be closed
+                if data == "end":
+                    self.redis_logger.info("Lock Extender will be closed.")
+                    await lock.extend(
+                        additional_time=lock_time_extender_add_time,
+                        replace_ttl=lock_time_extender_replace_ttl
+                        )   
+                    return None
+                
+            # Extend lock expire time
+            if lock_time_extender_replace_ttl:
+                self.redis_logger.info("Lock expire time will be extended w/ttl: {lock_time_extender_add_time} seconds"
+                                       .format(lock_time_extender_add_time=lock_time_extender_add_time))
+            else:
+                self.redis_logger.info("Lock expire time will be extended w/expire: {lock_time_extender_add_time} seconds"
+                                       .format(lock_time_extender_add_time=lock_time_extender_add_time))
+                
+            _ = await lock.extend(
+                additional_time=lock_time_extender_add_time,
+                replace_ttl=lock_time_extender_replace_ttl
+                )   
+
+            # If lock is released due to some reason (from another process, redis server restart etc.), raise RuntimeError
+            is_locked = await lock.locked()
+            if not is_locked:
+                raise RuntimeError("[FATAL] Redis Lock is released!")
+            
+    async def execute_asyncfunc_with_close_lock_extender_pubsub(
+        self,
+        aioharedis_client: AioHaredisClient,
+        func: Callable,
+        lock_key: str,
+        lock_time_extender_suffix: str,
+        redis_logger: Union[logging.Logger, None],
+        args,
+        **kwargs
+        ) -> Any:
+        """Execute asyncronous function with close lock extender for finish lock extender after async main function execution.
+
+        Args:
+            aioharedis_client (AioHaredisClient): AioHaredisClient Instance
+            func (Callable): Function name to be executed.
+            lock_key (str): Name of the lock key
+            lock_time_extender_suffix (str): Suffix for lock extender stream key
+            aioharedis_client (AioHaredisClient): AioHaredisClient Instance
+            redis_logger (Union[logging.Logger, None], optional): Logger Instance. Defaults to None.
+            
+        Returns:
+            Any: Result of the function
+        """
+        
+        result = await func(*args, **kwargs)
+        
+        stream_key = "pubsub:{lock_key}.{lock_time_extender_suffix}".format(lock_key=lock_key, lock_time_extender_suffix=lock_time_extender_suffix)
+        end_data = {"result": "end"}
+                            
+        await aioharedis_client.client_conn.publish(channel=stream_key, message=json.dumps(end_data))
+        redis_logger.info("Lock extender closer event sent from the main function.")
+            
+        return result
+    
+    def execute_func_with_close_lock_extender_pubsub(
+        self,
+        haredis_client: AioHaredisClient,
+        func: Callable,
+        lock_key: str,
+        lock_time_extender_suffix: str,
+        redis_logger,
+        args,
+        **kwargs
+        ) -> Any:
+        """Execute asyncronous function with close lock extender for finish lock extender after sync main function execution.
+
+        Args:
+            aioharedis_client (AioHaredisClient): AioHaredisClient Instance
+            func (Callable): Function name to be executed.
+            lock_key (str): Name of the lock key
+            lock_time_extender_suffix (str): Suffix for lock extender stream key
+            aioharedis_client (AioHaredisClient): AioHaredisClient Instance
+            redis_logger (Union[logging.Logger, None], optional): Logger Instance. Defaults to None.
+            
+        Returns:
+            Any: Result of the function
+        """
+        
+        result = func(*args, **kwargs)
+        
+        stream_key = "pubsub:{lock_key}.{lock_time_extender_suffix}".format(lock_key=lock_key, lock_time_extender_suffix=lock_time_extender_suffix)
+        end_data = {"result": "end"}
+                          
+        haredis_client.client_conn.publish(channel=stream_key, message=json.dumps(end_data))
+        redis_logger.info("Lock extender closer event sent from the main function.")
+            
+        return result
+    
+    async def partial_main_selector_pubsub(
+        self,
+        func: Callable,
+        lock_key: str,
+        lock_time_extender_suffix: str,
+        is_main_coroutine: bool,
+        run_with_lock_time_extender: bool,
+        args,
+        kwargs,
+    ):
+        """Select partial main function based on is_main_coroutine parameter w/pubsub
+
+        Args:
+            func (Callable): Function name to be executed.
+            lock_key (str): Name of the lock key.
+            lock_time_extender_suffix (str): Suffix for lock extender stream key.
+            is_main_coroutine (bool): If True, execute asyncronous function, if False, execute syncronous function.
+            run_with_lock_time_extender (bool): If True, lock time extender will be executed for High Availability.
+            args (tuple): args
+            kwargs (dict): kwargs
+            
+        Returns:
+            Partial main function.
+        """
+        
+        # TODO optimize this function
+        
+        if run_with_lock_time_extender:
+            partial_main = partial(
+                self.execute_func_with_close_lock_extender_pubsub,
+                self.haredis_client,
+                func,
+                lock_key,
+                lock_time_extender_suffix,
+                self.redis_logger,
+                args,
+                **kwargs
+                )     
+            if is_main_coroutine:
+                partial_main = partial(
+                    self.execute_asyncfunc_with_close_lock_extender_pubsub,
+                    self.aioharedis_client,
+                    func,
+                    lock_key,
+                    lock_time_extender_suffix,
+                    self.redis_logger,
+                    args,
+                    **kwargs
+                    )
+        else:
+            partial_main = partial(
+                func,
+                args,
+                **kwargs
+                )
+                
+        return partial_main
+                            
+    async def aiocall_consumer_pubsub(
+        self,
+        lock_key: str,
+        pubsub_channel: dict,
+        consumer_blocking_time: int,
+        null_handler: Any,
+        consumer_do_retry: bool,
+        consumer_retry_count: int,
+        consumer_retry_blocking_time_ms: int,
+        consumer_max_re_retry: int
+        ):
+        """Call consumer when lock is not owned by current process and if already acquired by another process w/pubsub
+
+        Args:
+            lock_key (str): Name of the lock key.
+            pubsub_channel (str): Name of the pub/sub channel.
+            consumer_blocking_time (int): Blocking time in milliseconds for consumers.
+            null_handler (Any): Null handler for empty result (it can be {}, [] or null).
+            consumer_do_retry (bool): If True, consumer will be retried, if lock released.
+            consumer_retry_count (int): Retry count for consumer.
+            consumer_retry_blocking_time_ms (int): Blocking time in milliseconds for consumer retry.
+            consumer_max_re_retry (int): Max re-retry count for consumer.
+
+        Returns:
+            Any: Result of the function
+        """
+        
+        if not isinstance(consumer_blocking_time, int):
+            raise TypeError("consumer_blocking_time must be integer.")
+        
+        if consumer_blocking_time < 0:
+            raise ValueError("consumer_blocking_time must be greater than 0.")
+                
+        self.redis_logger.debug("Lock key: {lock_key} acquire failed. Result will be tried to retrieve from consumer".format(lock_key=lock_key))
+        result = await self.aioharedis_client.consume_event_subscriber(
+            pubsub_channel=pubsub_channel,
+            lock_key=lock_key,
+            do_retry=consumer_do_retry,
+            retry_count=consumer_retry_count,
+            retry_blocking_time_ms=consumer_retry_blocking_time_ms,
+            max_re_retry=consumer_max_re_retry
+            )
+                
+        if result:
+            
+            # Retrieve data from event
+            self.redis_logger.info("Event Received from producer: {event_info}".format(event_info=result))
+            
+            if isinstance(result, str) and result == "null":
+                # Return null_handler
+                return null_handler
+            
+            if isinstance(result, str) and result.startswith("RedException"):
+                # Return string as RedException:<exception_string>
+                return result
+                        
+            return json.loads(result)
+        
+        else:
+            raise RuntimeError("An error occured while retrieving data from consumer.")
         

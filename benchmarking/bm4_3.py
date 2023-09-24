@@ -2,9 +2,13 @@ import asyncio
 from time import perf_counter
 
 import aiohttp
-from constants import Endpoints, Datas, PORTS, HOST
+from constants import Endpoints, Datas, PORTS, HOST, API_PREFIX
 
 REQ_COUNT = 500
+
+class API_PREFIX:
+    STREAM = "haredis-stream"
+    PUBSUB = "haredis-pubsub"
 
 async def fetch(s: aiohttp.ClientSession, url):
     headers = {
@@ -12,9 +16,10 @@ async def fetch(s: aiohttp.ClientSession, url):
         'Content-Type': 'application/json'
     }
     
-    async with s.post('http://{HOST}:{PORT}/haredis/{ENDPOINT}'.format(
+    async with s.post('http://{HOST}:{PORT}/{API_PREFIX}/{ENDPOINT}'.format(
         HOST=HOST,
-        PORT=PORTS.API_PORT_2,
+        PORT=PORTS.API_PORT_3,
+        API_PREFIX=API_PREFIX.STREAM,
         ENDPOINT=Endpoints.async_event_decorated
         ),
         headers=headers, json=Datas.CLEAN_SAMPLE_1) as r:

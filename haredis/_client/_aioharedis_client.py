@@ -292,29 +292,86 @@ class AioHaredisClient:
             message (str): Event to publish to subscribers channel
 
         """
-        
+ 
+        # Send Serialized Event to channel
         event = await self.client_conn.publish(channel=pubsub_channel, message=message)
-        # print(f"event {message} consumed by number of {event} consumers")
-        
-                
-    async def consume_event_subscriber(self, pubsub_channel: str):
+        return event
+
+    async def consume_event_subscriber(
+        self,
+        pubsub_channel: str,
+        lock_key: str,
+        do_retry = True,
+        retry_count = 5,
+        retry_blocking_time_ms = 2 * 1000,
+        max_re_retry = 2
+        ):
         """
         Firstly it subscribes to pubsub_channel and then when it receives an event, it consumes it.
 
         Args:
             pubsub_channel (str): Name of the pub-sub channel to subscribe which was created by publisher
+            lock_key (str): Name of the lock key.
+            do_retry (bool, optional): If True, it will retry to acquire lock. Defaults to True.
+            retry_count (int, optional): Retry count. Defaults to 5.
+            retry_blocking_time_ms (int, optional): Retry blocking time in miliseconds. Defaults to 2 * 1000.
+            max_re_retry (int, optional): Max re-retry count for lock release problem. Defaults to 2.
 
         Returns:
             Event: Event from publisher.
         """
-                
+        
+        re_retry_counter = 0
+        
+        # Subscribe to Channel        
         ps = self.client_conn.pubsub()
         await ps.subscribe(pubsub_channel)
+        
+        # Listen to Channel
         async for raw_message in ps.listen():
             if raw_message['type'] == 'message':
                 result = raw_message['data']
+                # try:
+                #     result = json.loads(result)
+                # except Exception as e:
+                #     self.redis_logger.error("Data is not JSON Encodable!")
+                #     raise TypeError("Data is not JSON Encodable!") 
                 return result
-                # yield result
+                
+            lock_key_status = await self.client_conn.get(lock_key)
+                        
+            if lock_key_status is None:
+                
+                # If max_retry is reached, raise exception
+                if re_retry_counter == max_re_retry:
+                    raise Exception("Max re-retry count reached for Consumer.")
+                
+                # If not do_retry when lock released, raise exception directly
+                if not do_retry:
+                    raise Exception("Redis Lock is released! Consumer can't be consume events from stream.")
+                
+                self.redis_logger.warning("Lock is not acquired or released! Consumer will retry consume events from stream again in {retry_count} \
+                    times with {retry_blocking_time_ms} seconds blocking..".format(retry_count=retry_count, retry_blocking_time_ms=retry_blocking_time_ms))
+                
+                # Wait for retry_blocking_time_ms seconds
+                for i in range(retry_count+1):
+                    i_plus_one = i + 1
+                    if i == retry_count:
+                        raise Exception("Max retry count reached for Consumer.")
+                    
+                    self.redis_logger.info("Retrying to get redis lock: {i_plus_one}.time".format(i_plus_one=i_plus_one))
+                    
+                    # Wait for retry_blocking_time_ms seconds
+                    await asyncio.sleep(retry_blocking_time_ms/1000)
+                    
+                    # Query lock key status again for retry, if lock key is reacquired, break the loop
+                    # And go to the beginning of the while loop after incrementing retry_counter
+                    lock_key_status = await self.client_conn.get(lock_key)
+                    if lock_key_status:
+
+                        self.redis_logger.info("New redis lock obtained after retrying {i_plus_one} time. Consumer will be retry to consume events from stream.".format(i_plus_one=i_plus_one))
+                        re_retry_counter = re_retry_counter + 1
+                        break
         
     async def acquire_lock(self, lock_key: str, expire_time=40):
         """This function allows to assign a lock to a key for distrubuted caching.
@@ -356,7 +413,7 @@ class AioHaredisClient:
     async def is_aioredis_available(self):
         try:
             await self.client_conn.ping()
-            print("Successfully connected to redis")
+            self.redis_logger.debug("Successfully connected to AioRedis Server!")
         except Exception as e:
             message = "AioRedis Connection Error! Error: {e}".format(e=e)
             self.redis_logger.error(message)

@@ -29,5 +29,5 @@ _AIOREDIS = aioredis.Redis(
 RL_MANAGER = HaredisLockRelaseManager(
     _REDIS,
     _AIOREDIS,
-    redis_logger=set_up_logging(console_log_level="DEBUG", logfile_log_level="DEBUG")
+    redis_logger=set_up_logging(console_log_level="DEBUG", logfile_log_level="DEBUG", console_log_color=False)
     )

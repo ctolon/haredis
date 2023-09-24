@@ -1,1 +1,0 @@
-use bm4.py files for distributed tests.

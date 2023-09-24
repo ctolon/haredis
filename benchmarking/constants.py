@@ -36,4 +36,8 @@ class PORTS:
     API_PORT_2 = 5704
     API_PORT_3 = 5705
     
+class API_PREFIX:
+    STREAM = "haredis-stream"
+    PUBSUB = "haredis-pubsub"
+    
 HOST = "0.0.0.0"

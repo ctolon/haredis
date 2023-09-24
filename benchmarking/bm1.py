@@ -13,7 +13,7 @@ async def fetch(s: aiohttp.ClientSession, url):
         "param1": 2,
         "param2": 4
     }
-    async with s.post('http://0.0.0.0:5703/haredis/async-event-decorated', headers=headers, json=data) as r:
+    async with s.post('http://0.0.0.0:5703/haredis-stream/async-event-decorated', headers=headers, json=data) as r:
         if r.status != 200:
             r.raise_for_status()
         return await r.text()

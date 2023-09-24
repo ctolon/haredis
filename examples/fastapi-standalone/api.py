@@ -8,6 +8,7 @@ import redis
 from redis import asyncio as aioredis
 
 from routes.event import router as event_router
+from routes.pubsub import router as pubsub_router
 from config import RedisSettings, APISettings
 
 async def create_aioredis_pool() -> aioredis.ConnectionPool:
@@ -85,7 +86,8 @@ async def shutdown_event():
     app.state.redis.close()
 
 
-app.include_router(event_router, prefix="/haredis")
+app.include_router(event_router, prefix="/haredis-stream")
+app.include_router(pubsub_router, prefix="/haredis-pubsub")
 
 
 if __name__ == '__main__':
