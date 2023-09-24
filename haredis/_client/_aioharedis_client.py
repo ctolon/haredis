@@ -59,7 +59,7 @@ class AioHaredisClient:
         return self.__redis_logger
                 
     # Producer - Consumer Implementation for streams API
-    async def produce_event_xadd(self, stream_name: str, data: dict, max_messages = 1, maxlen=1, stream_id="*"):
+    async def xproduce(self, stream_name: str, data: dict, max_messages = 1, maxlen=1, stream_id="*"):
         """
         This method produces messages to a Redis Stream. Defaults to produce 1 event. If you want to produce more than 1 event,
         you can use max_messages argument. If you want to produce events infinitely, you can set max_messages to None.
@@ -103,7 +103,7 @@ class AioHaredisClient:
                 # print(f"Event Info: {info}")
                 await asyncio.sleep(1)
             
-    async def consume_event_xread(
+    async def xconsume(
         self,
         streams: dict,
         lock_key: str,
@@ -209,7 +209,7 @@ class AioHaredisClient:
 
         # await self.client_conn.xgroup_setid(stream_key=stream_key, groupname=group_name, id=0) 
 
-    async def consume_event_xreadgroup(
+    async def xconsumegroup(
         self,
         streams: dict,
         group_name: str,
@@ -283,7 +283,7 @@ class AioHaredisClient:
             return resp
         return "WARNING: Stream does not exists..."
                     
-    async def produce_event_publish(self, pubsub_channel: str, message: str):
+    async def publish_msg(self, pubsub_channel: str, message: str):
         """
         Send events to pub-sub channel.
 
@@ -297,7 +297,7 @@ class AioHaredisClient:
         event = await self.client_conn.publish(channel=pubsub_channel, message=message)
         return event
 
-    async def consume_event_subscriber(
+    async def subscribe_msg(
         self,
         pubsub_channel: str,
         lock_key: str,

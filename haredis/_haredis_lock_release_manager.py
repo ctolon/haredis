@@ -129,7 +129,7 @@ class HaredisLockRelaseManager(object):
                 
         # Print warning messages if run_with_lock_time_extender is False
         if not run_with_lock_time_extender:
-            await self.rl_manager.warn_aio_lock_time_extender(
+            await self.rl_manager.lte_warn(
                 lock_time_extender_suffix,
                 lock_time_extender_add_time,
                 lock_time_extender_blocking_time,
@@ -214,7 +214,7 @@ class HaredisLockRelaseManager(object):
                     )
 
                 partial_lock_time_extender = partial(
-                    self.rl_manager.aio_lock_time_extender,
+                    self.rl_manager.run_lte_streams,
                     lock,
                     consumer_stream_key,   
                     lock_time_extender_suffix,
@@ -242,7 +242,7 @@ class HaredisLockRelaseManager(object):
                                                            .format(func_name=func_name))
                         runner = await asyncio.gather(
                             loop.run_in_executor(None, partial_main),
-                            self.rl_manager.aio_lock_time_extender(
+                            self.rl_manager.run_lte_streams(
                                 lock,
                                 consumer_stream_key,   
                                 lock_time_extender_suffix,
@@ -286,12 +286,12 @@ class HaredisLockRelaseManager(object):
                     event_data = {"result": raw_data}
                     await self.rl_manager.aioharedis_client.release_lock(lock)
                     self.rl_manager.redis_logger.info("Lock key: {lock_key} released.".format(lock_key=lock_key))
-                    _ = await self.rl_manager.aioharedis_client.produce_event_xadd(stream_name=consumer_stream_key, data=event_data, maxlen=1)
+                    _ = await self.rl_manager.aioharedis_client.xproduce(stream_name=consumer_stream_key, data=event_data, maxlen=1)
                     event_info = await self.rl_manager.aioharedis_client.client_conn.xinfo_stream(consumer_stream_key)
                     event_id = event_info["last-entry"][0]
                     self.rl_manager.redis_logger.info("Event produced to notify consumers: {event_info}".format(event_info=event_info))
 
-                    asyncio.ensure_future(self.rl_manager.aio_delete_event(consumer_stream_key, lock_key, event_id, event_info, delete_event_wait_time), loop=loop) 
+                    asyncio.ensure_future(self.rl_manager.xdel_event(consumer_stream_key, lock_key, event_id, event_info, delete_event_wait_time), loop=loop) 
                     return raw_data
                 
                 # Check if result is empty
@@ -301,11 +301,11 @@ class HaredisLockRelaseManager(object):
                     event_data = {"result": raw_data}
                     await self.rl_manager.aioharedis_client.release_lock(lock)
                     self.rl_manager.redis_logger.info("Lock key: {lock_key} released.".format(lock_key=lock_key))
-                    _ = await self.rl_manager.aioharedis_client.produce_event_xadd(stream_name=consumer_stream_key, data=event_data, maxlen=1)
+                    _ = await self.rl_manager.aioharedis_client.xproduce(stream_name=consumer_stream_key, data=event_data, maxlen=1)
                     event_info = await self.rl_manager.aioharedis_client.client_conn.xinfo_stream(consumer_stream_key)
                     event_id = event_info["last-entry"][0]
                     self.rl_manager.redis_logger.info("Event produced to notify consumers: {event_info}".format(event_info=event_info))
-                    asyncio.ensure_future(self.rl_manager.aio_delete_event(consumer_stream_key, lock_key, event_id, event_info, delete_event_wait_time), loop=loop) 
+                    asyncio.ensure_future(self.rl_manager.xdel_event(consumer_stream_key, lock_key, event_id, event_info, delete_event_wait_time), loop=loop) 
                     return null_handler
                 
                 # If everything is ok, serialize data, release lock and finally produce event to consumers
@@ -315,16 +315,16 @@ class HaredisLockRelaseManager(object):
                     await self.rl_manager.set_result_to_cache(cache_key, response_cache, serialized_result)
                 await self.rl_manager.aioharedis_client.release_lock(lock)
                 self.rl_manager.redis_logger.info("Lock key: {lock_key} released.".format(lock_key=lock_key))
-                _ = await self.rl_manager.aioharedis_client.produce_event_xadd(stream_name=consumer_stream_key, data=event_data, maxlen=1)
+                _ = await self.rl_manager.aioharedis_client.xproduce(stream_name=consumer_stream_key, data=event_data, maxlen=1)
                 event_info = await self.rl_manager.aioharedis_client.client_conn.xinfo_stream(consumer_stream_key)
                 event_id = event_info["last-entry"][0]
                 # event_data = event_info["last-entry"][1]
                 self.rl_manager.redis_logger.info("Event produced to notify consumers: {event_info}".format(event_info=event_info))
-                asyncio.ensure_future(self.rl_manager.aio_delete_event(consumer_stream_key, lock_key, event_id, event_info, delete_event_wait_time), loop=loop) 
+                asyncio.ensure_future(self.rl_manager.xdel_event(consumer_stream_key, lock_key, event_id, event_info, delete_event_wait_time), loop=loop) 
         else:
             
             # Call consumer if lock is not owned by current process
-            result = await self.rl_manager.aiocall_consumer(
+            result = await self.rl_manager.xconsume_call(
                 lock_key,
                 streams,
                 consumer_blocking_time,
@@ -419,7 +419,7 @@ class HaredisLockRelaseManager(object):
                 
         # Print warning messages if run_with_lock_time_extender is False
         if not run_with_lock_time_extender:
-            await self.rl_manager.warn_aio_lock_time_extender(
+            await self.rl_manager.lte_warn(
                 lock_time_extender_suffix,
                 lock_time_extender_add_time,
                 lock_time_extender_blocking_time,
@@ -500,7 +500,7 @@ class HaredisLockRelaseManager(object):
                     )
 
                 partial_lock_time_extender = partial(
-                    self.rl_manager.aio_lock_time_extender_pubsub,
+                    self.rl_manager.run_lte_pubsub,
                     lock,
                     pubsub_channel,   
                     lock_time_extender_suffix,
@@ -527,7 +527,7 @@ class HaredisLockRelaseManager(object):
                                                            .format(func_name=func_name))
                         runner = await asyncio.gather(
                             loop.run_in_executor(None, partial_main),
-                            self.rl_manager.aio_lock_time_extender_pubsub(
+                            self.rl_manager.run_lte_pubsub(
                                 lock,
                                 pubsub_channel,   
                                 lock_time_extender_suffix,
@@ -571,7 +571,7 @@ class HaredisLockRelaseManager(object):
                     # event_data = {"result": raw_data}
                     await self.rl_manager.aioharedis_client.release_lock(lock)
                     self.rl_manager.redis_logger.info("Lock key: {lock_key} released.".format(lock_key=lock_key))
-                    _ = await self.rl_manager.aioharedis_client.produce_event_publish(pubsub_channel=pubsub_channel, message=raw_data)
+                    _ = await self.rl_manager.aioharedis_client.publish_msg(pubsub_channel=pubsub_channel, message=raw_data)
                     self.rl_manager.redis_logger.info("Event produced to notify consumers, pubsub-channel: {pubsub_channel} Event: {message}"
                                         .format(pubsub_channel=pubsub_channel, message=_))
 
@@ -584,7 +584,7 @@ class HaredisLockRelaseManager(object):
                     # event_data = {"result": raw_data}
                     await self.rl_manager.aioharedis_client.release_lock(lock)
                     self.rl_manager.redis_logger.info("Lock key: {lock_key} released.".format(lock_key=lock_key))
-                    _ = await self.rl_manager.aioharedis_client.produce_event_publish(pubsub_channel=pubsub_channel, message=raw_data)
+                    _ = await self.rl_manager.aioharedis_client.publish_msg(pubsub_channel=pubsub_channel, message=raw_data)
                     self.rl_manager.redis_logger.info("Event produced to notify consumers, pubsub-channel: {pubsub_channel} Event: {message}"
                                         .format(pubsub_channel=pubsub_channel, message=_))
                     return null_handler
@@ -596,14 +596,14 @@ class HaredisLockRelaseManager(object):
                     await self.rl_manager.set_result_to_cache(cache_key, response_cache, serialized_result)
                 await self.rl_manager.aioharedis_client.release_lock(lock)
                 self.rl_manager.redis_logger.info("Lock key: {lock_key} released.".format(lock_key=lock_key))
-                _ = await self.rl_manager.aioharedis_client.produce_event_publish(pubsub_channel=pubsub_channel, message=serialized_result)
+                _ = await self.rl_manager.aioharedis_client.publish_msg(pubsub_channel=pubsub_channel, message=serialized_result)
                 self.rl_manager.redis_logger.info("Event produced to notify consumers, pubsub-channel: {pubsub_channel} Event: {message}"
                                     .format(pubsub_channel=pubsub_channel, message=_))
                 
         else:
             
             # Call consumer if lock is not owned by current process
-            result = await self.rl_manager.aiocall_consumer_pubsub(
+            result = await self.rl_manager.subscriber_call(
                 lock_key,
                 pubsub_channel,
                 consumer_blocking_time,
@@ -617,7 +617,7 @@ class HaredisLockRelaseManager(object):
             
         return result
                         
-    def aio_lock_release_decorator(
+    def aio_lock_release_decorator_streams(
         self,
         keys_to_lock: tuple,
         lock_key_prefix = None,

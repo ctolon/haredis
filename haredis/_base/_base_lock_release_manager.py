@@ -57,7 +57,7 @@ class _BaseLockRelaseManager(object):
     def redis_logger(self):
         return self.__redis_logger
         
-    async def aio_delete_event(
+    async def xdel_event(
         self,
         consumer_stream_key: dict,
         lock_key: str,
@@ -104,7 +104,7 @@ class _BaseLockRelaseManager(object):
             self.redis_logger.warning("Event not deleted after produce: {event_info}"
                                       .format(event_info=event_info))
             
-    async def warn_aio_lock_time_extender(
+    async def lte_warn(
         self,
         lock_time_extender_suffix,
         lock_time_extender_add_time,
@@ -123,7 +123,7 @@ class _BaseLockRelaseManager(object):
         if lock_time_extender_replace_ttl is not None:
             self.redis_logger.warning("lock_time_extender_replace_ttl will be ignored because run_with_lock_time_extender is False.")
             
-    async def aio_lock_time_extender(
+    async def run_lte_streams(
         self,
         lock: Lock,
         consumer_stream_key: str,
@@ -222,7 +222,7 @@ class _BaseLockRelaseManager(object):
             if not is_locked:
                 raise RuntimeError("[FATAL] Redis Lock is released!")
             
-    async def execute_asyncfunc_with_close_lock_extender(
+    async def aiorun_lte_streams_wrp(
         self,
         aioharedis_client: AioHaredisClient,
         func: Callable,
@@ -256,7 +256,7 @@ class _BaseLockRelaseManager(object):
             
         return result
     
-    def execute_func_with_close_lock_extender(
+    def run_lte_streams_wrp(
         self,
         haredis_client: AioHaredisClient,
         func: Callable,
@@ -319,7 +319,7 @@ class _BaseLockRelaseManager(object):
         
         if run_with_lock_time_extender:
             partial_main = partial(
-                self.execute_func_with_close_lock_extender,
+                self.run_lte_streams_wrp,
                 self.haredis_client,
                 func,
                 lock_key,
@@ -330,7 +330,7 @@ class _BaseLockRelaseManager(object):
                 )     
             if is_main_coroutine:
                 partial_main = partial(
-                    self.execute_asyncfunc_with_close_lock_extender,
+                    self.aiorun_lte_streams_wrp,
                     self.aioharedis_client,
                     func,
                     lock_key,
@@ -348,7 +348,7 @@ class _BaseLockRelaseManager(object):
                 
         return partial_main
                     
-    async def aiocall_consumer(
+    async def xconsume_call(
         self,
         lock_key: str,
         streams: dict,
@@ -384,7 +384,7 @@ class _BaseLockRelaseManager(object):
             raise ValueError("consumer_blocking_time must be greater than 0.")
                 
         self.redis_logger.debug("Lock key: {lock_key} acquire failed. Result will be tried to retrieve from consumer".format(lock_key=lock_key))
-        result = await self.aioharedis_client.consume_event_xread(
+        result = await self.aioharedis_client.xconsume(
             streams=streams,
             lock_key=lock_key,
             blocking_time_ms=consumer_blocking_time,
@@ -552,7 +552,7 @@ class _BaseLockRelaseManager(object):
             
     # PUB-SUB Implementation
     
-    async def aio_lock_time_extender_pubsub(
+    async def run_lte_pubsub(
         self,
         lock: Lock,
         pubsub_channel: str,
@@ -661,7 +661,7 @@ class _BaseLockRelaseManager(object):
             if not is_locked:
                 raise RuntimeError("[FATAL] Redis Lock is released!")
             
-    async def execute_asyncfunc_with_close_lock_extender_pubsub(
+    async def aiorun_lte_pubsub_wrp(
         self,
         aioharedis_client: AioHaredisClient,
         func: Callable,
@@ -695,7 +695,7 @@ class _BaseLockRelaseManager(object):
             
         return result
     
-    def execute_func_with_close_lock_extender_pubsub(
+    def run_lte_pubsub_wrp(
         self,
         haredis_client: AioHaredisClient,
         func: Callable,
@@ -758,7 +758,7 @@ class _BaseLockRelaseManager(object):
         
         if run_with_lock_time_extender:
             partial_main = partial(
-                self.execute_func_with_close_lock_extender_pubsub,
+                self.run_lte_pubsub_wrp,
                 self.haredis_client,
                 func,
                 lock_key,
@@ -769,7 +769,7 @@ class _BaseLockRelaseManager(object):
                 )     
             if is_main_coroutine:
                 partial_main = partial(
-                    self.execute_asyncfunc_with_close_lock_extender_pubsub,
+                    self.aiorun_lte_pubsub_wrp,
                     self.aioharedis_client,
                     func,
                     lock_key,
@@ -787,7 +787,7 @@ class _BaseLockRelaseManager(object):
                 
         return partial_main
                             
-    async def aiocall_consumer_pubsub(
+    async def subscriber_call(
         self,
         lock_key: str,
         pubsub_channel: dict,
@@ -821,7 +821,7 @@ class _BaseLockRelaseManager(object):
             raise ValueError("consumer_blocking_time must be greater than 0.")
                 
         self.redis_logger.debug("Lock key: {lock_key} acquire failed. Result will be tried to retrieve from consumer".format(lock_key=lock_key))
-        result = await self.aioharedis_client.consume_event_subscriber(
+        result = await self.aioharedis_client.subscribe_msg(
             pubsub_channel=pubsub_channel,
             lock_key=lock_key,
             do_retry=consumer_do_retry,

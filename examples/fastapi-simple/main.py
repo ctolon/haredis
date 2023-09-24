@@ -107,7 +107,7 @@ async def shutdown_event():
 
 
 # Option 1: Define functions to be used in routes (if you want to use lock release decorator)
-@RL_MANAGER.aio_lock_release_decorator(
+@RL_MANAGER.aio_lock_release_decorator_streams(
     keys_to_lock=("param1", "param2"),
     lock_key_prefix=None,
     lock_expire_time=30,
@@ -146,7 +146,7 @@ def sync_decorated_style(*args, **kwargs):
             
     return result
 
-@RL_MANAGER.aio_lock_release_decorator(
+@RL_MANAGER.aio_lock_release_decorator_streams(
     keys_to_lock=("param1", "param2"),
     lock_key_prefix=None,
     lock_expire_time=30,

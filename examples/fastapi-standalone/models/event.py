@@ -100,7 +100,7 @@ class EventModel(metaclass=Singleton):
     # Business Logic + RL Decorated Combined Functions #
     # ------------------------------------------------ #
     
-    @RL_MANAGER.aio_lock_release_decorator(
+    @RL_MANAGER.aio_lock_release_decorator_streams(
         keys_to_lock=("param1", "param2"),
         lock_key_prefix=None,
         lock_expire_time=30,
@@ -143,7 +143,7 @@ class EventModel(metaclass=Singleton):
                 
         return result
     
-    @RL_MANAGER.aio_lock_release_decorator(
+    @RL_MANAGER.aio_lock_release_decorator_streams(
         keys_to_lock=("param1", "param2"),
         lock_key_prefix=None,
         lock_expire_time=30,
@@ -194,7 +194,7 @@ class EventModel(metaclass=Singleton):
     # Business Logic which wrapped from RL Decorator Functions #
     # -------------------------------------------------------- #
     
-    @RL_MANAGER.aio_lock_release_decorator(
+    @RL_MANAGER.aio_lock_release_decorator_streams(
         keys_to_lock=("param1", "param2"),
         lock_key_prefix=None,
         lock_expire_time=30,
@@ -218,7 +218,7 @@ class EventModel(metaclass=Singleton):
         """Decorated Sync Example Wrapper Function with lock release."""
         return self.sync_event_without_rl(*args, **kwargs)
     
-    @RL_MANAGER.aio_lock_release_decorator(
+    @RL_MANAGER.aio_lock_release_decorator_streams(
         keys_to_lock=("param1", "param2"),
         lock_key_prefix=None,
         lock_expire_time=30,

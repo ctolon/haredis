@@ -57,7 +57,7 @@ class HaredisClient:
         
         return self.__redis_logger
         
-    def produce_event_xadd(self, stream_name: str, data: dict, max_messages = 1, maxlen=1, stream_id="*"):
+    def xproduce(self, stream_name: str, data: dict, max_messages = 1, maxlen=1, stream_id="*"):
         """
         This method produces messages to a Redis Stream. Defaults to produce 1 event. If you want to produce more than 1 event,
         you can use max_messages argument. If you want to produce events infinitely, you can set max_messages to None.
@@ -103,7 +103,7 @@ class HaredisClient:
                 # print(f"Event Info: {info}")
                 time.sleep(1)
                 
-    def consume_event_xread(self, streams: dict, lock_key: str, blocking_time_ms = 5000, count = 1):
+    def xconsume(self, streams: dict, lock_key: str, blocking_time_ms = 5000, count = 1):
         """This method consumes messages from a Redis Stream infinitly w/out consumer group.
 
         Args:
@@ -160,7 +160,7 @@ class HaredisClient:
             info = self.client_conn.xinfo_groups(stream_name)
             self.redis_logger.info("Consumer group info: {info}".format(info=info))
             
-    def consume_event_xreadgroup(
+    def xconsumegroup(
         self,
         streams: dict,
         group_name: str,
@@ -230,7 +230,7 @@ class HaredisClient:
             return resp
         return "WARNING: Stream does not exists..."
     
-    def produce_event_publish(self, pubsub_channel: str, message: str):
+    def publish_msg(self, pubsub_channel: str, message: str):
         """
         Send events to pub-sub channel.
 
@@ -243,7 +243,7 @@ class HaredisClient:
         event = self.client_conn.publish(channel=pubsub_channel, message=message)
         # print(f"event {message} consumed by number of {event} consumers")
         
-    def consume_event_subscriber(self, pubsub_channel: str):
+    def subscribe_msg(self, pubsub_channel: str):
         """
         Firstly it subscribes to pubsub_channel and then when it receives an event, it consumes it.
 
