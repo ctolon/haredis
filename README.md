@@ -1,4 +1,4 @@
-# haredis: Python Extension for redis with Abstractions
+# haredis: Python Extension for Redis Lock-Release Algorithm
 
 `haredis` is a Python module integrating redis/aioredis
 lock-release algorithms with a simple way in High Availability.
