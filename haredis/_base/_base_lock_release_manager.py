@@ -178,11 +178,20 @@ class _BaseLockRelaseManager(object):
         streams = {lock_extend_stream_key: "$"}
         is_locked = await lock.locked()
         
+        self.redis_logger.debug("Lock Extender Stream Key: ")
+        self.redis_logger.debug("{lock_extend_stream_key}".format(lock_extend_stream_key=lock_extend_stream_key))
+        
         # TODO maybe implement lock token based lock time extender here and delete execute_with layers.
         
         # While lock is acquired, call lock time extender consumer
         while is_locked:
             consume = await self.aioharedis_client.client_conn.xread(streams=streams, count=1, block=lock_time_extender_blocking_time)
+            
+            key, messages = consume[0]
+            last_id, data = messages[0]
+                   
+            self.redis_logger.debug("Consume Data: {key} {last_id} {data}"
+                                    .format(key=key, last_id=last_id, data=data))
             
             # Retrieve data from event
             if len(consume) > 0:
@@ -193,6 +202,7 @@ class _BaseLockRelaseManager(object):
                 data = event_data["result"]
                 
                 # If data is "end", lock extender will be closed
+                self.redis_logger.debug("Lock Extender Data: {data}".format(data=data))
                 if data == "end":
                     self.redis_logger.info("Lock Extender will be closed.")
                     _ = await self.aioharedis_client.client_conn.xdel(lock_extend_stream_key, last_id)
@@ -252,7 +262,9 @@ class _BaseLockRelaseManager(object):
         end_data = {"result": "end"}
                             
         await aioharedis_client.client_conn.xadd(stream_key, end_data, maxlen=1)
-        redis_logger.info("Lock extender closer event sent from the main function.")
+        redis_logger.info("Lock extender closer event sent from the main function")
+        redis_logger.info("stream_key , end_data:")
+        redis_logger.debug("{stream_key} , {end_data}".format(stream_key=stream_key, end_data=end_data))
             
         return result
     
@@ -287,6 +299,8 @@ class _BaseLockRelaseManager(object):
                           
         haredis_client.client_conn.xadd(stream_key, end_data, maxlen=1)
         redis_logger.info("Lock extender closer event sent from the main function.")
+        redis_logger.info("stream_key , end_data:")
+        redis_logger.debug("{stream_key} , {end_data}".format(stream_key=stream_key, end_data=end_data))
             
         return result
     
