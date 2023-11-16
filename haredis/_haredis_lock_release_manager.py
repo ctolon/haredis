@@ -270,6 +270,8 @@ class HaredisLockRelaseManager(object):
             except Exception as e:
                 exception_string = e.args[0]
                 self.rl_manager.redis_logger.error("Exception: {exception_string}".format(exception_string=exception_string))
+                self.rl_manager.redis_logger.error("Exception Occured for Lock key: {lock_key}.".format(lock_key=lock_key))
+                self.rl_manager.redis_logger.exception("Task Exception", exc_info=e)
                 result = exception_string
                 exception_found = True
                 
@@ -555,6 +557,8 @@ class HaredisLockRelaseManager(object):
             except Exception as e:
                 exception_string = e.args[0]
                 self.rl_manager.redis_logger.error("Exception: {exception_string}".format(exception_string=exception_string))
+                self.rl_manager.redis_logger.error("Exception Occured for Lock key: {lock_key}.".format(lock_key=lock_key))
+                self.rl_manager.redis_logger.exception("Task Exception", exc_info=e)
                 result = exception_string
                 exception_found = True
                 

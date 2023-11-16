@@ -178,20 +178,11 @@ class _BaseLockRelaseManager(object):
         streams = {lock_extend_stream_key: "$"}
         is_locked = await lock.locked()
         
-        self.redis_logger.debug("Lock Extender Stream Key: ")
-        self.redis_logger.debug("{lock_extend_stream_key}".format(lock_extend_stream_key=lock_extend_stream_key))
-        
         # TODO maybe implement lock token based lock time extender here and delete execute_with layers.
         
         # While lock is acquired, call lock time extender consumer
         while is_locked:
             consume = await self.aioharedis_client.client_conn.xread(streams=streams, count=1, block=lock_time_extender_blocking_time)
-            
-            key, messages = consume[0]
-            last_id, data = messages[0]
-                   
-            self.redis_logger.debug("Consume Data: {key} {last_id} {data}"
-                                    .format(key=key, last_id=last_id, data=data))
             
             # Retrieve data from event
             if len(consume) > 0:
@@ -202,9 +193,9 @@ class _BaseLockRelaseManager(object):
                 data = event_data["result"]
                 
                 # If data is "end", lock extender will be closed
-                self.redis_logger.debug("Lock Extender Data: {data}".format(data=data))
                 if data == "end":
-                    self.redis_logger.info("Lock Extender will be closed.")
+                    self.redis_logger.info("Lock Extender will be close for this stream: {lock_extend_stream_key}"
+                                           .format(lock_extend_stream_key=lock_extend_stream_key))
                     _ = await self.aioharedis_client.client_conn.xdel(lock_extend_stream_key, last_id)
                     self.redis_logger.debug("Lock Extender event deleted: {last_id}"
                                             .format(last_id=last_id))
@@ -216,11 +207,11 @@ class _BaseLockRelaseManager(object):
                 
             # Extend lock expire time
             if lock_time_extender_replace_ttl:
-                self.redis_logger.info("Lock expire time will be extended w/ttl: {lock_time_extender_add_time} seconds"
+                self.redis_logger.info("Lock expire time will be extended w/ttl: {lock_time_extender_add_time} seconds for {lock_extend_stream_key}"
                                        .format(lock_time_extender_add_time=lock_time_extender_add_time))
             else:
-                self.redis_logger.info("Lock expire time will be extended w/expire: {lock_time_extender_add_time} seconds"
-                                       .format(lock_time_extender_add_time=lock_time_extender_add_time))
+                self.redis_logger.info("Lock expire time will be extended w/expire: {lock_time_extender_add_time} seconds for {lock_extend_stream_key}"
+                                       .format(lock_time_extender_add_time=lock_time_extender_add_time, lock_extend_stream_key=lock_extend_stream_key))
                 
             _ = await lock.extend(
                 additional_time=lock_time_extender_add_time,
@@ -230,6 +221,8 @@ class _BaseLockRelaseManager(object):
             # If lock is released due to some reason (from another process, redis server restart etc.), raise RuntimeError
             is_locked = await lock.locked()
             if not is_locked:
+                self.redis_logger.error("Redis Lock is released for this stream: {lock_extend_stream_key}"
+                                        .format(lock_extend_stream_key=lock_extend_stream_key))
                 raise RuntimeError("[FATAL] Redis Lock is released!")
             
     async def aiorun_lte_streams_wrp(
@@ -645,12 +638,12 @@ class _BaseLockRelaseManager(object):
             if len(consume) > 0:
                 self.redis_logger.debug("Lock Extender: Event Received from producer: {consume}"
                                         .format(consume=consume))
-                
+
                 data = consume["result"]
                 
                 # If data is "end", lock extender will be closed
                 if data == "end":
-                    self.redis_logger.info("Lock Extender will be closed.")
+                    self.redis_logger.info("Lock Extender will be close for this stream: {lock_extend_pubsub_key}".format(lock_extend_pubsub_key=lock_extend_pubsub_key))
                     await lock.extend(
                         additional_time=lock_time_extender_add_time,
                         replace_ttl=lock_time_extender_replace_ttl
@@ -659,11 +652,11 @@ class _BaseLockRelaseManager(object):
                 
             # Extend lock expire time
             if lock_time_extender_replace_ttl:
-                self.redis_logger.info("Lock expire time will be extended w/ttl: {lock_time_extender_add_time} seconds"
-                                       .format(lock_time_extender_add_time=lock_time_extender_add_time))
+                self.redis_logger.info("Lock expire time will be extended w/ttl: {lock_time_extender_add_time} seconds for {lock_extend_pubsub_key}"
+                                       .format(lock_time_extender_add_time=lock_time_extender_add_time, lock_extend_pubsub_key=lock_extend_pubsub_key))
             else:
-                self.redis_logger.info("Lock expire time will be extended w/expire: {lock_time_extender_add_time} seconds"
-                                       .format(lock_time_extender_add_time=lock_time_extender_add_time))
+                self.redis_logger.info("Lock expire time will be extended w/expire: {lock_time_extender_add_time} seconds for {lock_extend_pubsub_key}"
+                                       .format(lock_time_extender_add_time=lock_time_extender_add_time, lock_extend_pubsub_key=lock_extend_pubsub_key))
                 
             _ = await lock.extend(
                 additional_time=lock_time_extender_add_time,
@@ -673,6 +666,8 @@ class _BaseLockRelaseManager(object):
             # If lock is released due to some reason (from another process, redis server restart etc.), raise RuntimeError
             is_locked = await lock.locked()
             if not is_locked:
+                self.redis_logger.error("Redis Lock is released for this stream: {lock_extend_stream_key}"
+                                        .format(lock_extend_pubsub_key=lock_extend_pubsub_key))
                 raise RuntimeError("[FATAL] Redis Lock is released!")
             
     async def aiorun_lte_pubsub_wrp(
@@ -861,4 +856,3 @@ class _BaseLockRelaseManager(object):
         
         else:
             raise RuntimeError("An error occured while retrieving data from consumer.")
-        
