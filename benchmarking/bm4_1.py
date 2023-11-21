@@ -65,4 +65,4 @@ if __name__ == '__main__':
     start = perf_counter()
     asyncio.run(main())
     stop = perf_counter()
-    print(f"Time: {stop - start}")
+    print("Time: {stop - start}".format(stop=stop, start=start)

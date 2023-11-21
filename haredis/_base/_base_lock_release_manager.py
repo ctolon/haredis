@@ -184,8 +184,8 @@ class _BaseLockRelaseManager(object):
         while is_locked:
             consume = await self.aioharedis_client.client_conn.xread(streams=streams, count=1, block=lock_time_extender_blocking_time)
             
-            key, messages = consume[0]
-            last_id, data = messages[0]
+            # key, messages = consume[0]
+            # last_id, data = messages[0]
             
             # Retrieve data from event
             if len(consume) > 0:
