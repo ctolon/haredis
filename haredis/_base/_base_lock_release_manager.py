@@ -211,7 +211,7 @@ class _BaseLockRelaseManager(object):
             # Extend lock expire time
             if lock_time_extender_replace_ttl:
                 self.redis_logger.info("Lock expire time will be extended w/ttl: {lock_time_extender_add_time} seconds for {lock_extend_stream_key}"
-                                       .format(lock_time_extender_add_time=lock_time_extender_add_time))
+                                       .format(lock_time_extender_add_time=lock_time_extender_add_time, lock_extend_stream_key=lock_extend_stream_key))
             else:
                 self.redis_logger.info("Lock expire time will be extended w/expire: {lock_time_extender_add_time} seconds for {lock_extend_stream_key}"
                                        .format(lock_time_extender_add_time=lock_time_extender_add_time, lock_extend_stream_key=lock_extend_stream_key))
