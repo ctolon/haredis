@@ -298,7 +298,7 @@ class HaredisLockRelaseManager(object):
                     self.rl_manager.redis_logger.info("Event produced to notify consumers: {event_info}".format(event_info=event_info))
 
                     asyncio.ensure_future(self.rl_manager.xdel_event(consumer_stream_key, lock_key, event_id, event_info, delete_event_wait_time), loop=loop) 
-                    return raw_data
+                    return event_data
                 
                 # Check if result is empty
                 if result is None or result == {} or result == [] or result == "null":
