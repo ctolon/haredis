@@ -407,8 +407,8 @@ class _BaseLockRelaseManager(object):
         if "from-event" in result.keys():
             
             # Retrieve data from event
-            result = result["from-event"]
-            key, messages = result[0]
+            result_from_event = result["from-event"]
+            key, messages = result_from_event[0]
             last_id, event_data = messages[0]
             data = event_data["result"]
             event_info = await self.aioharedis_client.client_conn.xinfo_stream(consumer_stream_key)
@@ -419,8 +419,11 @@ class _BaseLockRelaseManager(object):
                 return null_handler
             
             if isinstance(data, str) and data.startswith("RedException"):
-                # Return string as RedException:<exception_string>
-                return data
+                
+                # Retrive traceback from event if result is RedException
+                exc = event_data.get("traceback")
+                response = {"traceback": exc, "error": True, "message": data, "from": "haredis consumer", "stream_key": consumer_stream_key}
+                return response
             
             data = json.loads(data)
             return data

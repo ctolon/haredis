@@ -6,6 +6,7 @@ import functools
 from functools import partial
 import inspect
 import sys
+import traceback
 
 # For Asyncio Python 3.6 compatibility
 if sys.version_info[:2] >= (3, 7):
@@ -105,6 +106,7 @@ class HaredisLockRelaseManager(object):
         exception_found = False
         func_name = func.__name__
         nullable = [{}, [], "null"]
+        tb_str = ""
         
         # Type Checks
         if not isinstance(func, Callable):
@@ -272,6 +274,8 @@ class HaredisLockRelaseManager(object):
                 self.rl_manager.redis_logger.error("Exception: {exception_string}".format(exception_string=exception_string))
                 self.rl_manager.redis_logger.error("Exception Occured for Lock key: {lock_key}.".format(lock_key=lock_key))
                 self.rl_manager.redis_logger.exception("Task Exception", exc_info=e)
+                tb_str = traceback.format_exception(etype=type(e), value=e, tb=e.__traceback__)
+                tb_str = "".join(tb_str)
                 result = exception_string
                 exception_found = True
                 
@@ -285,7 +289,7 @@ class HaredisLockRelaseManager(object):
                     self.rl_manager.redis_logger.error("Result is exception. Lock key: {lock_key} will be released. Exception: {result}"
                                                        .format(lock_key=lock_key, result=result))
                     raw_data = "RedException" + ":" + str(result)
-                    event_data = {"result": raw_data}
+                    event_data = {"result": raw_data, "traceback": tb_str}
                     await self.rl_manager.aioharedis_client.release_lock(lock)
                     self.rl_manager.redis_logger.info("Lock key: {lock_key} released.".format(lock_key=lock_key))
                     _ = await self.rl_manager.aioharedis_client.xproduce(stream_name=consumer_stream_key, data=event_data, maxlen=1)
