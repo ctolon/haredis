@@ -37,7 +37,7 @@ def set_up_logging(
         log_to_file=True,
         console_log_output="stdout",
         console_log_level="INFO",
-        console_log_color=True,
+        console_log_color=False,
         logfile_file="redis.log",
         logfile_log_level="INFO",
         logfile_log_color=False,
