@@ -296,7 +296,7 @@ class HaredisLockRelaseManager(object):
                     self.rl_manager.redis_logger.error("Result is exception. Lock key: {lock_key} will be released. Exception: {result}"
                                                        .format(lock_key=lock_key, result=result))
                     raw_data = "RedException" + ":" + str(result)
-                    event_data = {"result": raw_data, "traceback": tb_str}
+                    event_data = {"result": raw_data, "traceback": tb_str, "error": True}
                     await self.rl_manager.aioharedis_client.release_lock(lock)
                     self.rl_manager.redis_logger.info("Lock key: {lock_key} released.".format(lock_key=lock_key))
                     _ = await self.rl_manager.aioharedis_client.xproduce(stream_name=consumer_stream_key, data=event_data, maxlen=1)
