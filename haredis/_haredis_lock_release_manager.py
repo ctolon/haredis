@@ -8,6 +8,13 @@ import inspect
 import sys
 import traceback
 
+# If Fastapi installed, Use Fastapi Generic Response for Middleware/traceback.
+try:
+    from fastapi.responses import JSONResponse
+    FASTAPI_INSTALLED = True
+except:
+    FASTAPI_INSTALLED = False
+
 # For Asyncio Python 3.6 compatibility
 if sys.version_info[:2] >= (3, 7):
     from asyncio import get_running_loop
@@ -297,7 +304,9 @@ class HaredisLockRelaseManager(object):
                     event_id = event_info["last-entry"][0]
                     self.rl_manager.redis_logger.info("Event produced to notify consumers: {event_info}".format(event_info=event_info))
 
-                    asyncio.ensure_future(self.rl_manager.xdel_event(consumer_stream_key, lock_key, event_id, event_info, delete_event_wait_time), loop=loop) 
+                    asyncio.ensure_future(self.rl_manager.xdel_event(consumer_stream_key, lock_key, event_id, event_info, delete_event_wait_time), loop=loop)
+                    if FASTAPI_INSTALLED:
+                        return JSONResponse(status_code=500, content=event_data) 
                     return event_data
                 
                 # Check if result is empty

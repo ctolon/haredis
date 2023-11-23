@@ -12,6 +12,13 @@ from redis.asyncio.lock import Lock
 
 from .._client import AioHaredisClient, HaredisClient
 
+# If Fastapi installed, Use Fastapi Generic Response for Middleware/traceback.
+try:
+    from fastapi.responses import JSONResponse
+    FASTAPI_INSTALLED = True
+except:
+    FASTAPI_INSTALLED = False
+
 
 class _BaseLockRelaseManager(object):
     """## Redis Lock Release Manager Class for Distributed Caching/Locking in Redis
@@ -423,6 +430,8 @@ class _BaseLockRelaseManager(object):
                 # Retrive traceback from event if result is RedException
                 exc = event_data.get("traceback")
                 response = {"traceback": exc, "error": True, "message": data, "from": "haredis consumer", "stream_key": consumer_stream_key}
+                if FASTAPI_INSTALLED:
+                    return JSONResponse(status_code=500, content=response)
                 return response
             
             data = json.loads(data)
